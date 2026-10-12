@@ -96,13 +96,18 @@ impl UnitSampler for RandomSampler {
 pub struct RandomStreams {
     pub base_seed: u64,
     pub purpose: u64,
-    pub cycle: u64,
+    pub cycle: usize,
 }
 
 impl SamplerStreams for RandomStreams {
     type Sampler = RandomSampler;
     fn stream(&self, chunk: usize) -> RandomSampler {
-        RandomSampler::new(stream_seed(self.base_seed, self.purpose, self.cycle, chunk as u64))
+        RandomSampler::new(stream_seed(
+            self.base_seed,
+            self.purpose,
+            self.cycle as u64,
+            chunk as u64,
+        ))
     }
 }
 
@@ -152,12 +157,19 @@ mod tests {
     #[test]
     fn stream_seeds_do_not_collide_like_addition() {
         assert_ne!(stream_seed(1, 0, 1, 0), stream_seed(2, 0, 0, 0));
-        assert_ne!(stream_seed(0, purpose::INIT, 0, 0), stream_seed(0, purpose::PROPOSAL, 0, 0));
+        assert_ne!(
+            stream_seed(0, purpose::INIT, 0, 0),
+            stream_seed(0, purpose::PROPOSAL, 0, 0)
+        );
     }
 
     #[test]
     fn same_stream_gives_same_numbers() {
-        let streams = RandomStreams { base_seed: 42, purpose: purpose::INIT, cycle: 3 };
+        let streams = RandomStreams {
+            base_seed: 42,
+            purpose: purpose::INIT,
+            cycle: 3,
+        };
         let (mut a, mut b) = (streams.stream(7), streams.stream(7));
         let (mut ua, mut ub) = ([0.0; 3], [0.0; 3]);
         for _ in 0..10 {

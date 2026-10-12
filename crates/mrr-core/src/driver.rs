@@ -6,7 +6,7 @@ use crate::{
     init::isotropic_white_uniform,
     moments::MomentLayout,
     sampler::{RandomStreams, purpose},
-    traits::{Emission, Gather, Medium, Proposal},
+    traits::{Emission, Gather, Medium, Proposal, Source},
 };
 
 // Output of simulation
@@ -15,18 +15,19 @@ struct RunResult {
 }
 
 /// Parameters influencing simulation
-struct RunConfig {
+struct RunConfig<P> {
     rules: Vec<Box<dyn StoppingRule>>,
     n_source_atoms: usize, // Number of atoms in empirical source
     max_legendre_order: usize,
     n_groups: usize,
     seed: u64, // Base seed: every random stream in the run is derived from this
+    proposal: P,
 }
 
 /// Power iteration
 fn power_iterate<M: Medium, G: Gather, E: Emission, P: Proposal<M>>(
     medium: &M,
-    cfg: &RunConfig,
+    cfg: &RunConfig<P>,
 ) -> RunResult {
     let cycle: usize = 0;
     let k: f64 = 0.0;
@@ -40,6 +41,7 @@ fn power_iterate<M: Medium, G: Gather, E: Emission, P: Proposal<M>>(
         cycle: 0,
     };
     let atoms = isotropic_white_uniform(medium, &layout, cfg.n_source_atoms, &init_streams);
+    let proposal = &cfg.proposal;
 
     loop {
         let info: CycleInfo = CycleInfo { cycle, k, k_prev };
@@ -48,7 +50,12 @@ fn power_iterate<M: Medium, G: Gather, E: Emission, P: Proposal<M>>(
         }
 
         // Sample new points according to proposal
-        // (use RandomStreams { base_seed: cfg.seed, purpose: purpose::PROPOSAL, cycle: cycle as u64 })
+        let proposal_streams = RandomStreams {
+            base_seed: cfg.seed,
+            purpose: purpose::PROPOSAL,
+            cycle: cycle,
+        };
+        proposal.sample_target_atoms(medium, &Source::Existing(&atoms), &proposal_streams);
 
         // Perform gather (fully abstracted?)
 
