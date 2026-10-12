@@ -1,6 +1,21 @@
-[package]
-name = "slab1d"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = ["crates/*"]
+resolver = "3"
 
-[dependencies]
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+
+[workspace.dependencies]
+# internal crates, referenced by path
+mrr-math = { path = "crates/mrr-math" }
+mrr-core = { path = "crates/mrr-core" }
+mrr-slab = { path = "crates/mrr-slab" }
+# external crates, versions pinned in one place
+rayon = "1"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+approx = "0.5"
+
+[profile.release]
+debug = true      # keep symbols so profilers can name your functions
