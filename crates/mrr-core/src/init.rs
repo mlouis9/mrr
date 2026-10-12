@@ -32,6 +32,7 @@ pub fn isotropic_white_uniform<M: Medium>(
 mod tests {
     use super::*;
     use crate::sampler::GridStreams1D;
+    use approx;
 
     /// Minimal 1D medium on [0, width) that accepts every sample
     struct TestSlab {
@@ -73,5 +74,7 @@ mod tests {
                 .iter()
                 .all(|&w| w == medium.volume() / n as f64)
         );
+        let sum = atoms.weights().iter().sum::<f64>();
+        approx::assert_relative_eq!(sum, medium.volume(), max_relative = 1e-12,);
     }
 }
