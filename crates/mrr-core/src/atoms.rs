@@ -3,7 +3,7 @@
 use crate::moments::MomentLayout;
 
 // Struct of arrays that contain properties of atoms templated by point type
-struct Atoms<P> {
+pub struct Atoms<P> {
     positions: Vec<P>,
     weights: Vec<f64>,
     moments: Vec<f64>,
