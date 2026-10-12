@@ -30,4 +30,20 @@ impl<P> Atoms<P> {
         self.weights.push(weight);
         self.moments.extend_from_slice(moment_block);
     }
+
+    /// Move all atoms of `other` onto the end of `self` (used to join chunks)
+    pub fn append(&mut self, mut other: Atoms<P>) {
+        assert_eq!(other.layout.block_len(), self.layout.block_len());
+        self.positions.append(&mut other.positions);
+        self.weights.append(&mut other.weights);
+        self.moments.append(&mut other.moments);
+    }
+
+    pub fn positions(&self) -> &[P] {
+        &self.positions
+    }
+
+    pub fn weights(&self) -> &[f64] {
+        &self.weights
+    }
 }
