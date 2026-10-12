@@ -50,4 +50,24 @@ impl<P> Atoms<P> {
     pub fn layout(&self) -> &MomentLayout {
         &self.layout
     }
+
+    /// Return the moment block belonging to atom `idx`.
+    pub fn atom_moments(&self, idx: usize) -> &[f64] {
+        assert!(idx < self.len());
+        &self.moments[self.layout.atom_range(idx)]
+    }
+
+    /// Return a mutable reference to the moment block belonging to atom `idx`.
+    fn atom_moments_mut(&mut self, idx: usize) -> &mut [f64] {
+        assert!(idx < self.len());
+        let range = self.layout.atom_range(idx);
+        &mut self.moments[range]
+    }
+
+    pub fn update_atom_moments(&mut self, idx: usize, moments: &[f64]) {
+        assert!(idx < self.len());
+        assert_eq!(moments.len(), self.layout.block_len());
+
+        self.atom_moments_mut(idx).copy_from_slice(moments);
+    }
 }

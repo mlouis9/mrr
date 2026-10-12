@@ -25,8 +25,9 @@ struct RunConfig<P> {
 }
 
 /// Power iteration
-fn power_iterate<M: Medium, G: Gather, E: Emission, P: Proposal<M>>(
+fn power_iterate<M: Medium, G: Gather<M>, E: Emission, P: Proposal<M>>(
     medium: &M,
+    gather: &G,
     cfg: &RunConfig<P>,
 ) -> RunResult {
     let cycle: usize = 0;
@@ -49,15 +50,26 @@ fn power_iterate<M: Medium, G: Gather, E: Emission, P: Proposal<M>>(
             break;
         }
 
-        // Sample new points according to proposal
+        // Sample new points and weights according to proposal
         let proposal_streams = RandomStreams {
             base_seed: cfg.seed,
             purpose: purpose::PROPOSAL,
             cycle: cycle,
         };
-        proposal.sample_target_atoms(medium, &Source::Existing(&atoms), &proposal_streams);
+        let (points, weights) =
+            proposal.sample_target_atoms(medium, &Source::Existing(&atoms), &proposal_streams);
+        let mut target_atoms = Atoms::new(cfg.n_source_atoms, layout.clone());
 
-        // Perform gather (fully abstracted?)
+        // Create empty atom array from sampled points and weights
+        for atom_idx in 0..cfg.n_source_atoms {
+            target_atoms.push(points[atom_idx], weights[atom_idx], &layout.zero_block());
+        }
+
+        // Perform gather
+        for target_idx in 0..cfg.n_source_atoms {
+            let moments = gather.gather(&atoms, &target_atoms, target_idx);
+            target_atoms.update_atom_moments(target_idx, &moments);
+        }
 
         // Compute new emission source
 

@@ -1,5 +1,6 @@
 //! Defines interface traits that are used to express the power iteration updates generically
 use crate::atoms::Atoms;
+use crate::moments::MomentLayout;
 use crate::sampler::SamplerStreams;
 
 /// A medium for the purposes of transport, required for computing optical depths
@@ -22,12 +23,22 @@ pub trait Medium {
 }
 
 /// An operation that 'gathers' the angular flux contributions of source atoms into a new source point flux
-pub trait Gather {}
+pub trait Gather<M: Medium> {
+    /// Take the source atoms and gather flux contributions to the target atom (given by its index in the
+    /// target_atoms struct of arrays) to compute the flux moments
+    fn gather(
+        &self,
+        src_atoms: &Atoms<M::Point>,
+        target_atoms: &Atoms<M::Point>,
+        target_idx: usize,
+    ) -> Vec<f64>;
+}
 
 /// Computes the emission from a gathered source point flux
 pub trait Emission {}
 
-/// Whether an empirical source is already existing or is being initialized, consequences for reuse of Proposal during initialization
+/// Whether an empirical source is already existing or is being initialized, consequences for
+/// reuse of Proposal during initialization
 pub enum Source<'a, P> {
     Existing(&'a Atoms<P>),
     Initialize(usize),

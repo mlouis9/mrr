@@ -1,4 +1,5 @@
 //! Describes how Legendre angular moments are implemented
+use std::ops::Range;
 
 /// Shape of one point's moment block: `n_moments` angular moments for each
 /// of `n_groups` energy groups, stored group-major (all moments of group 0,
@@ -47,5 +48,11 @@ impl MomentLayout {
     /// Create a zero block for a single atom
     pub fn zero_block(&self) -> Vec<f64> {
         vec![0.0; self.block_len()]
+    }
+
+    /// Return the range of the flat moments array corresponding to atom `idx`.
+    pub fn atom_range(&self, idx: usize) -> Range<usize> {
+        let start = idx * self.block_len();
+        start..start + self.block_len()
     }
 }
