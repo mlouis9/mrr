@@ -46,4 +46,8 @@ impl<P> Atoms<P> {
     pub fn weights(&self) -> &[f64] {
         &self.weights
     }
+
+    pub fn layout(&self) -> &MomentLayout {
+        &self.layout
+    }
 }

@@ -2,8 +2,9 @@
 
 use crate::atoms::Atoms;
 use crate::moments::MomentLayout;
+use crate::proposal::UniformProposal;
 use crate::sampler::{CHUNK_SIZE, SamplerStreams, UnitSampler};
-use crate::traits::Medium;
+use crate::traits::{Medium, Proposal, Source};
 
 /// Sample atoms isotropic in angle, white in energy, and uniform in space.
 ///
@@ -18,30 +19,11 @@ pub fn isotropic_white_uniform<M: Medium>(
     streams: &impl SamplerStreams,
 ) -> Atoms<M::Point> {
     let block = layout.isotropic_white_block();
-    let weight = 1.0 / n_atoms as f64;
-    let n_chunks = n_atoms.div_ceil(CHUNK_SIZE);
-
-    let chunks: Vec<Atoms<M::Point>> = (0..n_chunks)
-        .map(|chunk| {
-            // The last chunk may be smaller than CHUNK_SIZE
-            let n_here = CHUNK_SIZE.min(n_atoms - chunk * CHUNK_SIZE);
-            let mut sampler = streams.stream(chunk);
-            let mut part = Atoms::new(n_here, *layout);
-            let mut u = vec![0.0; M::SAMPLE_DIM];
-            while part.len() < n_here {
-                sampler.next_point(&mut u);
-                if let Some(point) = medium.map_uniform(&u) {
-                    part.push(point, weight, &block);
-                }
-            }
-            part
-        })
-        .collect();
-
-    // Join in chunk order (rayon's ordered `collect` would preserve this too)
     let mut atoms = Atoms::new(n_atoms, *layout);
-    for part in chunks {
-        atoms.append(part);
+    let (points, weights) =
+        UniformProposal.sample_target_atoms(medium, &Source::Initialize(n_atoms), streams);
+    for atom_idx in 0..n_atoms {
+        atoms.push(points[atom_idx], weights[atom_idx], &block);
     }
     atoms
 }
@@ -85,6 +67,11 @@ mod tests {
         for (i, &x) in atoms.positions().iter().enumerate() {
             assert_eq!(x, (i as f64 + 0.5) / n as f64 * 2.0);
         }
-        assert!(atoms.weights().iter().all(|&w| w == 1.0 / n as f64));
+        assert!(
+            atoms
+                .weights()
+                .iter()
+                .all(|&w| w == medium.volume() / n as f64)
+        );
     }
 }

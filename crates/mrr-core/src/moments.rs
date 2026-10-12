@@ -43,4 +43,9 @@ impl MomentLayout {
     pub fn isotropic_white_block(&self) -> Vec<f64> {
         self.isotropic_angular_block().repeat(self.n_groups)
     }
+
+    /// Create a zero block for a single atom
+    pub fn zero_block(&self) -> Vec<f64> {
+        vec![0.0; self.block_len()]
+    }
 }
