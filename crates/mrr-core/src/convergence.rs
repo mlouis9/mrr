@@ -30,6 +30,6 @@ pub struct MaxCycles {
 
 impl StoppingRule for MaxCycles {
     fn should_stop(&self, info: &CycleInfo) -> bool {
-        info.cycle > self.max
+        info.cycle >= self.max
     }
 }
