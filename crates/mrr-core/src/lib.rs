@@ -3,7 +3,8 @@
 mod atoms;
 mod convergence;
 mod driver;
+mod init;
 mod moments;
 mod proposal;
-mod rng;
+mod sampler;
 mod traits;

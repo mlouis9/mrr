@@ -6,7 +6,41 @@
 ///
 /// Moments are indexed by a flat index `k`. In 1D, k = ℓ. In 3D the mapping
 /// from (ℓ, m) to k is defined in `mrr_math`, not here
+#[derive(Clone, Copy)]
 pub struct MomentLayout {
     n_moments: usize,
     n_groups: usize,
+}
+
+impl MomentLayout {
+    pub fn from_legendre_order(max_order: usize, n_groups: usize) -> Self {
+        Self {
+            n_moments: max_order + 1,
+            n_groups,
+        }
+    }
+
+    pub fn new_moments_array(&self, n_atoms: usize) -> Vec<f64> {
+        Vec::with_capacity(n_atoms * self.n_moments * self.n_groups)
+    }
+
+    pub fn block_len(&self) -> usize {
+        self.n_moments * self.n_groups
+    }
+
+    /// Position of moment `l` of group `g` inside one atom's block, group major
+    pub fn index(&self, l: usize, g: usize) -> usize {
+        l + self.n_moments * g
+    }
+
+    fn isotropic_angular_block(&self) -> Vec<f64> {
+        let mut moments = vec![0.0; self.n_moments];
+        moments[0] = 1.0;
+        moments
+    }
+
+    /// Create an isotropic angular block in every energy group for a single atom
+    pub fn isotropic_white_block(&self) -> Vec<f64> {
+        self.isotropic_angular_block().repeat(self.n_groups)
+    }
 }
