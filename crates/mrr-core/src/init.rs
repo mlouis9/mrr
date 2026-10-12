@@ -59,10 +59,18 @@ mod tests {
     impl Medium for TestSlab {
         type Point = f64;
         const SAMPLE_DIM: usize = 1;
-        fn n_groups(&self) -> usize { 1 }
-        fn optical_depth(&self, _: f64, _: f64) -> f64 { 0.0 }
-        fn volume(&self) -> f64 { self.width }
-        fn map_uniform(&self, u: &[f64]) -> Option<f64> { Some(u[0] * self.width) }
+        fn n_groups(&self) -> usize {
+            1
+        }
+        fn optical_depth(&self, _: &f64, _: &f64) -> f64 {
+            0.0
+        }
+        fn volume(&self) -> f64 {
+            self.width
+        }
+        fn map_uniform(&self, u: &[f64]) -> Option<f64> {
+            Some(u[0] * self.width)
+        }
     }
 
     #[test]

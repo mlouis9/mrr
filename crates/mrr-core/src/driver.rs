@@ -24,7 +24,7 @@ struct RunConfig {
 }
 
 /// Power iteration
-fn power_iterate<M: Medium, G: Gather, E: Emission, P: Proposal>(
+fn power_iterate<M: Medium, G: Gather, E: Emission, P: Proposal<M>>(
     medium: &M,
     cfg: &RunConfig,
 ) -> RunResult {
