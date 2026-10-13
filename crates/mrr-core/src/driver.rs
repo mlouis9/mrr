@@ -9,7 +9,7 @@ use crate::{
     traits::{Emission, Gather, Medium, Proposal, Source, Targets},
 };
 
-// Output of simulation
+/// Output of simulation
 pub struct RunResult {
     k: f64,
 }
@@ -27,66 +27,63 @@ pub struct RunConfig {
 /// Contains the specification of the "problem" distinct from the parameters (often compute-dependent
 /// numerical parameters). Note for some fields this distinction is somewhat contrived, but it is
 /// useful for managing complexity regardless
-pub struct Problem<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>> {
+pub struct Problem<M, G, E, P> {
     medium: M,
     gather: G,
     emission: E,
     proposal: P,
 }
 
-// Stopping condition for power iteration that stops if any of the rules are true
+impl<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>> Problem<M, G, E, P> {
+    /// Generate proposal atoms
+    fn propose(
+        &self,
+        seed: u64,
+        cycle: usize,
+        atoms: &Atoms<M::Point>,
+        zero_block: &[f64],
+    ) -> Atoms<M::Point> {
+        let proposal_streams = RandomStreams {
+            base_seed: seed,
+            purpose: purpose::PROPOSAL,
+            cycle,
+        };
+        let layout = atoms.layout();
+        let Targets { points, weights } = self.proposal.sample_target_atoms(
+            &self.medium,
+            &Source::Existing(atoms),
+            &proposal_streams,
+        );
+        Atoms::from_targets(points, weights, *layout, zero_block)
+    }
+
+    fn gather_flux(&self, atoms: &Atoms<M::Point>, targets: &mut Atoms<M::Point>) {
+        for target_idx in 0..targets.len() {
+            let point = targets.points()[target_idx];
+            let moments = self.gather.gather(&self.medium, atoms, point);
+            targets.update_atom_moments(target_idx, &moments);
+        }
+    }
+
+    fn apply_emission(&self, targets: &mut Atoms<M::Point>) {
+        for target_idx in 0..targets.len() {
+            let moments = self
+                .emission
+                .compute_emission(&self.medium, targets.atom_moments(target_idx));
+            targets.update_atom_moments(target_idx, &moments);
+        }
+    }
+
+    fn normalize(&self, targets: &mut Atoms<M::Point>) -> f64 {
+        let k = targets.compute_integral() / self.medium.volume();
+        targets.scale_moments(1.0 / k);
+        k
+    }
+}
+
+/// Stopping condition for power iteration that stops if any of the rules are true
 fn should_stop(cfg: &RunConfig, info: &CycleInfo) -> bool {
     cfg.rules.iter().any(|r| r.should_stop(info))
-}
-
-// Generate proposal atoms
-fn propose<M: Medium, P: Proposal<M>>(
-    seed: u64,
-    cycle: usize,
-    medium: &M,
-    proposal: &P,
-    atoms: &Atoms<M::Point>,
-    zero_block: &[f64],
-) -> Atoms<M::Point> {
-    let proposal_streams = RandomStreams {
-        base_seed: seed,
-        purpose: purpose::PROPOSAL,
-        cycle,
-    };
-    let layout = atoms.layout();
-    let Targets { points, weights } =
-        proposal.sample_target_atoms(medium, &Source::Existing(atoms), &proposal_streams);
-    Atoms::from_targets(points.clone(), weights, *layout, zero_block)
-}
-
-fn gather_flux<M: Medium, G: Gather<M>>(
-    medium: &M,
-    gather: &G,
-    points: &Vec<M::Point>,
-    atoms: &Atoms<M::Point>,
-    targets: &mut Atoms<M::Point>,
-) {
-    for (target_idx, &point) in points.iter().enumerate() {
-        let moments = gather.gather(medium, atoms, point);
-        targets.update_atom_moments(target_idx, &moments);
-    }
-}
-
-fn apply_emission<M: Medium, E: Emission<M>>(
-    medium: &M,
-    emission: &E,
-    targets: &mut Atoms<M::Point>,
-) {
-    for target_idx in 0..targets.len() {
-        let moments = emission.compute_emission(medium, targets.atom_moments(target_idx));
-        targets.update_atom_moments(target_idx, &moments);
-    }
-}
-
-fn normalize<M: Medium>(medium: &M, targets: &mut Atoms<M::Point>) -> f64 {
-    let k = targets.compute_integral() / medium.volume();
-    targets.scale_moments(1.0 / k);
-    k
 }
 
 /// Power iteration
@@ -94,28 +91,22 @@ pub fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
     problem: &Problem<M, G, E, P>,
     cfg: &RunConfig,
 ) -> RunResult {
-    // Unpack problem
-    let Problem {
-        medium,
-        gather,
-        emission,
-        proposal,
-    } = problem;
-
     // Initialize loop parameters
     let mut cycle: usize = 0;
     let mut k: f64 = 0.0;
     let mut k_prev: f64 = -1.0; // Ensure loop runs for at least one iter
 
     // Initialize empirical source (once, before iterating)
-    let layout = MomentLayout::from_legendre_order(cfg.max_legendre_order, medium.n_groups());
+    let layout =
+        MomentLayout::from_legendre_order(cfg.max_legendre_order, problem.medium.n_groups());
     let zero_block = layout.zero_block();
     let init_streams = RandomStreams {
         base_seed: cfg.seed,
         purpose: purpose::INIT,
         cycle: 0,
     };
-    let mut atoms = isotropic_white_uniform(medium, &layout, cfg.n_source_atoms, &init_streams);
+    let mut atoms =
+        isotropic_white_uniform(&problem.medium, &layout, cfg.n_source_atoms, &init_streams);
 
     // Power iteration
     loop {
@@ -125,17 +116,16 @@ pub fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
         }
 
         // Sample new points and weights according to proposal
-        let mut targets = propose(cfg.seed, cycle, medium, proposal, &atoms, &zero_block);
-        let points = targets.points().to_vec();
+        let mut targets = problem.propose(cfg.seed, cycle, &atoms, &zero_block);
 
         // Perform gather
-        gather_flux(medium, gather, &points, &atoms, &mut targets);
+        problem.gather_flux(&atoms, &mut targets);
 
         // Compute new emission source
-        apply_emission(medium, emission, &mut targets);
+        problem.apply_emission(&mut targets);
 
         // Normalize and compute k
-        (k_prev, k) = (k, normalize(medium, &mut targets));
+        (k_prev, k) = (k, problem.normalize(&mut targets));
         atoms = targets;
         cycle += 1;
     }
