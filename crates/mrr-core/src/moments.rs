@@ -65,3 +65,57 @@ impl MomentLayout {
         start..start + self.block_len()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::*;
+
+    // Order 2 (3 moments) with 2 groups: block = [g0: l0 l1 l2 | g1: l0 l1 l2]
+    fn layout() -> MomentLayout {
+        MomentLayout::from_legendre_order(2, 2)
+    }
+
+    #[test]
+    fn block_len_is_moments_times_groups() {
+        assert_eq!(layout().block_len(), 6);
+    }
+
+    #[test]
+    fn index_is_group_major() {
+        let l = layout();
+        assert_eq!(l.index(0, 0), 0);
+        assert_eq!(l.index(2, 0), 2);
+        assert_eq!(l.index(0, 1), 3);
+        assert_eq!(l.index(1, 1), 4);
+    }
+
+    #[test]
+    fn moment_l_indices_visit_every_group() {
+        let l = layout();
+        assert_eq!(l.moment_l_indices(0).collect::<Vec<_>>(), vec![0, 3]);
+        assert_eq!(l.moment_l_indices(1).collect::<Vec<_>>(), vec![1, 4]);
+    }
+
+    #[test]
+    fn atom_range_selects_one_block() {
+        let l = layout();
+        assert_eq!(l.atom_range(0), 0..6);
+        assert_eq!(l.atom_range(1), 6..12);
+    }
+
+    #[test]
+    fn isotropic_white_block_has_q0_one_over_g() {
+        let l = MomentLayout::from_legendre_order(2, 3);
+        let third = 1.0 / 3.0;
+        assert_all_close(
+            &l.isotropic_white_block(),
+            &[third, 0.0, 0.0, third, 0.0, 0.0, third, 0.0, 0.0],
+        );
+    }
+
+    #[test]
+    fn zero_block_is_all_zeros() {
+        assert_eq!(layout().zero_block(), vec![0.0; 6]);
+    }
+}

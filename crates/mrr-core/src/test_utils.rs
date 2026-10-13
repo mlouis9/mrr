@@ -57,9 +57,9 @@ impl ConstGather {
 impl<M: Medium> Gather<M> for ConstGather {
     fn gather(
         &self,
-        medium: &M,
-        src_atoms: &crate::atoms::Atoms<<M as Medium>::Point>,
-        target_point: <M as Medium>::Point,
+        _medium: &M,
+        _src_atoms: &crate::atoms::Atoms<<M as Medium>::Point>,
+        _target_point: <M as Medium>::Point,
     ) -> Vec<f64> {
         self.block.clone()
     }
@@ -75,7 +75,7 @@ impl IdentityEmission {
 }
 
 impl<M: Medium> Emission<M> for IdentityEmission {
-    fn compute_emission(&self, medium: &M, target_moments: &[f64]) -> Vec<f64> {
+    fn compute_emission(&self, _medium: &M, target_moments: &[f64]) -> Vec<f64> {
         target_moments.to_vec()
     }
 }

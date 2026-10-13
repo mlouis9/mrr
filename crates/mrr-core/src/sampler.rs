@@ -141,7 +141,7 @@ pub struct GridStreams1D {
 }
 
 impl GridStreams1D {
-    fn new(n: usize) -> Self {
+    pub fn new(n: usize) -> Self {
         Self { n }
     }
 }
@@ -183,5 +183,55 @@ mod tests {
             b.next_point(&mut ub);
             assert_eq!(ua, ub);
         }
+    }
+
+    #[test]
+    fn grid_streams_continue_the_global_grid_across_chunks() {
+        let n = CHUNK_SIZE + 3;
+        let streams = GridStreams1D::new(n);
+        let mut u = [0.0];
+        // First point of chunk 1 is global index CHUNK_SIZE
+        streams.stream(1).next_point(&mut u);
+        assert_eq!(u[0], (CHUNK_SIZE as f64 + 0.5) / n as f64);
+    }
+
+    #[test]
+    fn random_draws_are_in_unit_interval_with_mean_one_half() {
+        let streams = RandomStreams {
+            base_seed: 7,
+            purpose: purpose::INIT,
+            cycle: 0,
+        };
+        let mut sampler = streams.stream(0);
+        let n = 100_000;
+        let mut u = [0.0];
+        let mut sum = 0.0;
+        for _ in 0..n {
+            sampler.next_point(&mut u);
+            assert!((0.0..1.0).contains(&u[0]));
+            sum += u[0];
+        }
+        // Standard error of the mean of U(0,1) is 1/sqrt(12 n); allow 5 of them.
+        // Deterministic for a fixed seed, so this cannot fail at random.
+        let std_err = 1.0 / (12.0 * n as f64).sqrt();
+        assert!((sum / n as f64 - 0.5).abs() < 5.0 * std_err);
+    }
+
+    #[test]
+    fn different_cycles_give_different_numbers() {
+        let a = RandomStreams {
+            base_seed: 1,
+            purpose: purpose::PROPOSAL,
+            cycle: 0,
+        };
+        let b = RandomStreams {
+            base_seed: 1,
+            purpose: purpose::PROPOSAL,
+            cycle: 1,
+        };
+        let (mut ua, mut ub) = ([0.0], [0.0]);
+        a.stream(0).next_point(&mut ua);
+        b.stream(0).next_point(&mut ub);
+        assert_ne!(ua, ub);
     }
 }

@@ -11,7 +11,10 @@ use crate::{
 
 /// Output of simulation
 pub struct RunResult {
-    k: f64,
+    /// Final eigenvalue estimate
+    pub k: f64,
+    /// Number of power-iteration cycles performed
+    pub cycles: usize,
 }
 
 /// Parameters influencing simulation
@@ -32,6 +35,17 @@ pub struct Problem<M, G, E, P> {
     gather: G,
     emission: E,
     proposal: P,
+}
+
+impl<M, G, E, P> Problem<M, G, E, P> {
+    pub fn new(medium: M, gather: G, emission: E, proposal: P) -> Self {
+        Self {
+            medium,
+            gather,
+            emission,
+            proposal,
+        }
+    }
 }
 
 impl<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>> Problem<M, G, E, P> {
@@ -126,10 +140,43 @@ pub fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
         atoms = targets;
         cycle += 1;
     }
-    RunResult { k }
+    RunResult { k, cycles: cycle }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::convergence::MaxCycles;
+    use crate::proposal::UniformProposal;
+    use crate::test_utils::*;
+
+    /// With a gather that always returns the isotropic white block and an
+    /// identity emission, every cycle reproduces a source of integral V, so
+    /// k must be exactly 1 and the run must stop after MaxCycles cycles.
+    /// This exercises init, proposal, gather, emission, normalization and
+    /// stopping together.
+    #[test]
+    fn steady_source_gives_k_one_and_stops_at_max_cycles() {
+        let n_groups = 3;
+        let max_order = 2;
+        let medium = TestSlab::new(1.5, n_groups, 0.0..1.0);
+        let block = MomentLayout::from_legendre_order(max_order, n_groups).isotropic_white_block();
+        let problem = Problem::new(
+            medium,
+            ConstGather::new(block),
+            IdentityEmission::new(),
+            UniformProposal,
+        );
+        let cfg = RunConfig {
+            rules: vec![Box::new(MaxCycles::new(5))],
+            n_source_atoms: 500,
+            max_legendre_order: max_order,
+            seed: 11,
+        };
+
+        let result = power_iterate(&problem, &cfg);
+
+        assert_eq!(result.cycles, 5);
+        assert_close(result.k, 1.0);
+    }
 }

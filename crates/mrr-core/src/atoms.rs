@@ -109,3 +109,61 @@ impl<P: Copy + Clone> Atoms<P> {
         atoms
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::*;
+
+    // Order 1 (2 moments) with 2 groups: block = [g0: l0 l1 | g1: l0 l1]
+    fn layout() -> MomentLayout {
+        MomentLayout::from_legendre_order(1, 2)
+    }
+
+    fn two_atoms() -> Atoms<f64> {
+        let mut atoms = Atoms::new(2, layout());
+        atoms.push(0.25, 0.5, &[1.0, 2.0, 3.0, 4.0]);
+        atoms.push(0.75, 1.5, &[5.0, 6.0, 7.0, 8.0]);
+        atoms
+    }
+
+    #[test]
+    fn push_then_read_back() {
+        let atoms = two_atoms();
+        assert_eq!(atoms.len(), 2);
+        assert_eq!(atoms.points(), &[0.25, 0.75]);
+        assert_eq!(atoms.weights(), &[0.5, 1.5]);
+        assert_eq!(atoms.atom_moments(1), &[5.0, 6.0, 7.0, 8.0]);
+    }
+
+    #[test]
+    fn update_changes_only_that_atom() {
+        let mut atoms = two_atoms();
+        atoms.update_atom_moments(0, &[0.0; 4]);
+        assert_eq!(atoms.atom_moments(0), &[0.0; 4]);
+        assert_eq!(atoms.atom_moments(1), &[5.0, 6.0, 7.0, 8.0]);
+    }
+
+    #[test]
+    fn append_keeps_order() {
+        let mut atoms = two_atoms();
+        atoms.append(two_atoms());
+        assert_eq!(atoms.points(), &[0.25, 0.75, 0.25, 0.75]);
+        assert_eq!(atoms.atom_moments(2), &[1.0, 2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn integral_uses_only_l0_moments() {
+        // Atom 0: w = 0.5, q0 = 1 + 3; atom 1: w = 1.5, q0 = 5 + 7.
+        // The l = 1 entries (2, 4, 6, 8) must not contribute.
+        assert_close(two_atoms().compute_integral(), 0.5 * 4.0 + 1.5 * 12.0);
+    }
+
+    #[test]
+    fn scaling_moments_scales_the_integral() {
+        let mut atoms = two_atoms();
+        let before = atoms.compute_integral();
+        atoms.scale_moments(0.5);
+        assert_close(atoms.compute_integral(), 0.5 * before);
+    }
+}

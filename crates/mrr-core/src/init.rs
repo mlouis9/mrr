@@ -29,7 +29,6 @@ mod tests {
     use super::*;
     use crate::sampler::{CHUNK_SIZE, GridStreams1D, RandomStreams, purpose};
     use crate::test_utils::*;
-    use approx;
 
     #[test]
     fn grid_init_is_exact_across_chunks() {
@@ -37,7 +36,7 @@ mod tests {
         let n = CHUNK_SIZE + 3;
         let medium = TestSlab::new(2.0, 1, 0.0..1.0);
         let layout = MomentLayout::from_legendre_order(2, 1);
-        let atoms = isotropic_white_uniform(&medium, &layout, n, &GridStreams1D { n });
+        let atoms = isotropic_white_uniform(&medium, &layout, n, &GridStreams1D::new(n));
 
         assert_eq!(atoms.len(), n);
         for (i, &x) in atoms.points().iter().enumerate() {
@@ -50,27 +49,39 @@ mod tests {
                 .all(|&w| w == medium.volume() / n as f64)
         );
         let sum = atoms.weights().iter().sum::<f64>();
-        approx::assert_relative_eq!(sum, medium.volume(), max_relative = 1e-12,);
+        assert_close(sum, medium.volume());
+    }
+
+    /// The isotropic white source integrates to V for any number of groups,
+    /// and every atom carries q0 = 1/G in each group (higher moments zero).
+    #[track_caller]
+    fn check_isotropic_white_source(n_groups: usize) {
+        let max_order = 3;
+        let n_atoms = CHUNK_SIZE + 3;
+        let medium = TestSlab::new(1.5, n_groups, 0.0..1.0);
+        let layout = MomentLayout::from_legendre_order(max_order, medium.n_groups());
+        let streams = RandomStreams {
+            base_seed: 1,
+            purpose: purpose::INIT,
+            cycle: 0,
+        };
+        let atoms = isotropic_white_uniform(&medium, &layout, n_atoms, &streams);
+
+        assert_close(atoms.compute_integral(), medium.volume());
+        assert_all_close(atoms.atom_moments(0), &layout.isotropic_white_block());
+        assert_close(
+            atoms.atom_moments(0)[layout.index(0, 0)],
+            1.0 / n_groups as f64,
+        );
     }
 
     #[test]
-    fn isotropic_white_source_integrates_to_volume() {
-        #[track_caller]
-        fn check_integral(n_groups: usize) {
-            let max_order = 3;
-            let n_atoms = CHUNK_SIZE + 3;
-            let medium = TestSlab::new(1.5, n_groups, 0.0..1.0);
-            let layout = MomentLayout::from_legendre_order(max_order, n_groups);
-            let streams = RandomStreams {
-                base_seed: 1,
-                purpose: purpose::INIT,
-                cycle: 0,
-            };
-            let atoms = isotropic_white_uniform(&medium, &layout, n_atoms, &streams);
-            assert_close(atoms.compute_integral(), medium.volume());
-        }
+    fn isotropic_white_source_integrates_to_volume_one_group() {
+        check_isotropic_white_source(1);
+    }
 
-        check_integral(1);
-        check_integral(3);
+    #[test]
+    fn isotropic_white_source_integrates_to_volume_three_groups() {
+        check_isotropic_white_source(3);
     }
 }
