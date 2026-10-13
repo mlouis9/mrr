@@ -27,7 +27,7 @@ pub fn isotropic_white_uniform<M: Medium>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sampler::{CHUNK_SIZE, GridStreams1D};
+    use crate::sampler::{CHUNK_SIZE, GridStreams1D, RandomStreams, purpose};
     use crate::test_utils::*;
     use approx;
 
@@ -51,5 +51,26 @@ mod tests {
         );
         let sum = atoms.weights().iter().sum::<f64>();
         approx::assert_relative_eq!(sum, medium.volume(), max_relative = 1e-12,);
+    }
+
+    #[test]
+    fn isotropic_white_source_integrates_to_volume() {
+        #[track_caller]
+        fn check_integral(n_groups: usize) {
+            let max_order = 3;
+            let n_atoms = CHUNK_SIZE + 3;
+            let medium = TestSlab::new(1.5, n_groups, 0.0..1.0);
+            let layout = MomentLayout::from_legendre_order(max_order, n_groups);
+            let streams = RandomStreams {
+                base_seed: 1,
+                purpose: purpose::INIT,
+                cycle: 0,
+            };
+            let atoms = isotropic_white_uniform(&medium, &layout, n_atoms, &streams);
+            assert_close(atoms.compute_integral(), medium.volume());
+        }
+
+        check_integral(1);
+        check_integral(3);
     }
 }
