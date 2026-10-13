@@ -25,23 +25,25 @@ struct RunConfig<P> {
 }
 
 /// Power iteration
-fn power_iterate<M: Medium, G: Gather<M>, E: Emission, P: Proposal<M>>(
+fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
     medium: &M,
     gather: &G,
+    emission: &E,
     cfg: &RunConfig<P>,
 ) -> RunResult {
-    let cycle: usize = 0;
-    let k: f64 = 0.0;
-    let k_prev: f64 = 0.0;
+    let mut cycle: usize = 0;
+    let mut k: f64 = 0.0;
+    let mut k_prev: f64 = 0.0;
 
     // Initialize empirical source (once, before iterating)
     let layout = MomentLayout::from_legendre_order(cfg.max_legendre_order, cfg.n_groups);
+    let zero_block = layout.zero_block();
     let init_streams = RandomStreams {
         base_seed: cfg.seed,
         purpose: purpose::INIT,
         cycle: 0,
     };
-    let atoms = isotropic_white_uniform(medium, &layout, cfg.n_source_atoms, &init_streams);
+    let mut atoms = isotropic_white_uniform(medium, &layout, cfg.n_source_atoms, &init_streams);
     let proposal = &cfg.proposal;
 
     loop {
@@ -61,19 +63,28 @@ fn power_iterate<M: Medium, G: Gather<M>, E: Emission, P: Proposal<M>>(
         let mut target_atoms = Atoms::new(cfg.n_source_atoms, layout.clone());
 
         // Create empty atom array from sampled points and weights
-        for atom_idx in 0..cfg.n_source_atoms {
-            target_atoms.push(points[atom_idx], weights[atom_idx], &layout.zero_block());
+        for atom_idx in 0..points.len() {
+            target_atoms.push(points[atom_idx], weights[atom_idx], &zero_block);
         }
 
         // Perform gather
-        for target_idx in 0..cfg.n_source_atoms {
-            let moments = gather.gather(&atoms, &target_atoms, target_idx);
+        for target_idx in 0..points.len() {
+            let moments = gather.gather(medium, &atoms, &target_atoms, target_idx);
             target_atoms.update_atom_moments(target_idx, &moments);
         }
 
         // Compute new emission source
+        for target_idx in 0..points.len() {
+            let moments = emission.compute_emission(medium, &target_atoms, target_idx);
+            target_atoms.update_atom_moments(target_idx, &moments);
+        }
 
         // Normalize and compute k
+        k_prev = k;
+        k = target_atoms.compute_integral() / medium.volume();
+        target_atoms.normalize_moments(1.0 / k);
+        atoms = target_atoms;
+        cycle += 1;
     }
-    RunResult { k: 1.0 }
+    RunResult { k: k }
 }

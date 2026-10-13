@@ -28,6 +28,7 @@ pub trait Gather<M: Medium> {
     /// target_atoms struct of arrays) to compute the flux moments
     fn gather(
         &self,
+        medium: &M,
         src_atoms: &Atoms<M::Point>,
         target_atoms: &Atoms<M::Point>,
         target_idx: usize,
@@ -35,7 +36,15 @@ pub trait Gather<M: Medium> {
 }
 
 /// Computes the emission from a gathered source point flux
-pub trait Emission {}
+pub trait Emission<M: Medium> {
+    /// Compute emission for a single target atom
+    fn compute_emission(
+        &self,
+        medium: &M,
+        target_atoms: &Atoms<M::Point>,
+        target_idx: usize,
+    ) -> Vec<f64>;
+}
 
 /// Whether an empirical source is already existing or is being initialized, consequences for
 /// reuse of Proposal during initialization

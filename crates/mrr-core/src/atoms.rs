@@ -20,6 +20,7 @@ impl<P> Atoms<P> {
         }
     }
 
+    /// The number of atoms
     pub fn len(&self) -> usize {
         self.positions.len()
     }
@@ -69,5 +70,27 @@ impl<P> Atoms<P> {
         assert_eq!(moments.len(), self.layout.block_len());
 
         self.atom_moments_mut(idx).copy_from_slice(moments);
+    }
+
+    /// Compute integral of source, used for source normalization and k computation
+    pub fn compute_integral(&self) -> f64 {
+        self.moments
+            .chunks_exact(self.layout.block_len()) // Create an iterator of atoms by chunking by block_len
+            .zip(self.weights()) // Zip moments and weights iterator of (block, w)
+            .map(|(block, &w)| {
+                w * self
+                    .layout
+                    .moment_l_indices(0)
+                    .map(|i| block[i])
+                    .sum::<f64>() // Sum of moment 0 over energies using iterator mapping
+            })
+            .sum() // Sum over atoms
+    }
+
+    /// When the integral is computed, this method is used to normalize to unity
+    pub fn normalize_moments(&mut self, norm_factor: f64) {
+        for m in self.moments.iter_mut() {
+            *m *= norm_factor;
+        }
     }
 }

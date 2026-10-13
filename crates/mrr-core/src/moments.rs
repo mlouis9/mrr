@@ -34,6 +34,11 @@ impl MomentLayout {
         l + self.n_moments * g
     }
 
+    /// Positions of moment `l` of all groups inside one atom's block
+    pub fn moment_l_indices(&self, l: usize) -> impl Iterator<Item = usize> + '_ {
+        (0..self.n_groups).map(move |g| self.index(l, g))
+    }
+
     fn isotropic_angular_block(&self) -> Vec<f64> {
         let mut moments = vec![0.0; self.n_moments];
         moments[0] = 1.0;
