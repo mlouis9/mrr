@@ -140,6 +140,12 @@ pub struct GridStreams1D {
     pub n: usize,
 }
 
+impl GridStreams1D {
+    fn new(n: usize) -> Self {
+        Self { n }
+    }
+}
+
 impl SamplerStreams for GridStreams1D {
     type Sampler = GridSampler1D;
     fn stream(&self, chunk: usize) -> GridSampler1D {
