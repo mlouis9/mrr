@@ -63,21 +63,17 @@ pub fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
         };
         let Targets { points, weights } =
             proposal.sample_target_atoms(medium, &Source::Existing(&atoms), &proposal_streams);
-        let mut target_atoms = Atoms::new(cfg.n_source_atoms, layout);
-
-        // Create empty atom array from sampled points and weights
-        for atom_idx in 0..points.len() {
-            target_atoms.push(points[atom_idx], weights[atom_idx], &zero_block);
-        }
+        let mut target_atoms =
+            Atoms::from_targets(points.clone(), weights, layout, zero_block.clone());
 
         // Perform gather
-        for target_idx in 0..points.len() {
+        for target_idx in 0..target_atoms.len() {
             let moments = gather.gather(medium, &atoms, points[target_idx]);
             target_atoms.update_atom_moments(target_idx, &moments);
         }
 
         // Compute new emission source
-        for target_idx in 0..points.len() {
+        for target_idx in 0..target_atoms.len() {
             let moments = emission.compute_emission(medium, target_atoms.atom_moments(target_idx));
             target_atoms.update_atom_moments(target_idx, &moments);
         }

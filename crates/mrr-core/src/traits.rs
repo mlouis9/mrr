@@ -41,7 +41,7 @@ pub enum Source<'a, P> {
     Initialize(usize),
 }
 
-impl<P> Source<'_, P> {
+impl<P: Copy + Clone> Source<'_, P> {
     pub fn n_atoms(&self) -> usize {
         match self {
             Source::Existing(atoms) => atoms.len(),

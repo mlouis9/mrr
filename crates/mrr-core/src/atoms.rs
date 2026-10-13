@@ -10,7 +10,7 @@ pub struct Atoms<P> {
     layout: MomentLayout,
 }
 
-impl<P> Atoms<P> {
+impl<P: Copy + Clone> Atoms<P> {
     pub fn new(n_atoms: usize, layout: MomentLayout) -> Self {
         Self {
             points: Vec::with_capacity(n_atoms),
@@ -92,5 +92,20 @@ impl<P> Atoms<P> {
         for m in self.moments.iter_mut() {
             *m *= factor;
         }
+    }
+
+    pub fn from_targets(
+        points: Vec<P>,
+        weights: Vec<f64>,
+        layout: MomentLayout,
+        block: Vec<f64>,
+    ) -> Atoms<P> {
+        assert_eq!(points.len(), weights.len());
+        assert_eq!(layout.block_len(), block.len());
+        let mut atoms = Atoms::new(points.len(), layout);
+        for atom_idx in 0..points.len() {
+            atoms.push(points[atom_idx], weights[atom_idx], &block);
+        }
+        atoms
     }
 }
