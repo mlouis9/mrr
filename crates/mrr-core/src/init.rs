@@ -4,7 +4,7 @@ use crate::atoms::Atoms;
 use crate::moments::MomentLayout;
 use crate::proposal::UniformProposal;
 use crate::sampler::SamplerStreams;
-use crate::traits::{Medium, Proposal, Source};
+use crate::traits::{Medium, Proposal, Source, Targets};
 
 /// Sample atoms isotropic in angle, white in energy, and uniform in space.
 ///
@@ -20,7 +20,7 @@ pub fn isotropic_white_uniform<M: Medium>(
 ) -> Atoms<M::Point> {
     let block = layout.isotropic_white_block();
     let mut atoms = Atoms::new(n_atoms, *layout);
-    let (points, weights) =
+    let Targets { points, weights } =
         UniformProposal.sample_target_atoms(medium, &Source::Initialize(n_atoms), streams);
     for atom_idx in 0..n_atoms {
         atoms.push(points[atom_idx], weights[atom_idx], &block);
@@ -65,7 +65,7 @@ mod tests {
         let atoms = isotropic_white_uniform(&medium, &layout, n, &GridStreams1D { n });
 
         assert_eq!(atoms.len(), n);
-        for (i, &x) in atoms.positions().iter().enumerate() {
+        for (i, &x) in atoms.points().iter().enumerate() {
             assert_eq!(x, (i as f64 + 0.5) / n as f64 * 2.0);
         }
         assert!(

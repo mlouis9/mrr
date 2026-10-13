@@ -6,7 +6,7 @@ use crate::{
     init::isotropic_white_uniform,
     moments::MomentLayout,
     sampler::{RandomStreams, purpose},
-    traits::{Emission, Gather, Medium, Proposal, Source},
+    traits::{Emission, Gather, Medium, Proposal, Source, Targets},
 };
 
 // Output of simulation
@@ -61,7 +61,7 @@ pub fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
             purpose: purpose::PROPOSAL,
             cycle,
         };
-        let (points, weights) =
+        let Targets { points, weights } =
             proposal.sample_target_atoms(medium, &Source::Existing(&atoms), &proposal_streams);
         let mut target_atoms = Atoms::new(cfg.n_source_atoms, layout);
 

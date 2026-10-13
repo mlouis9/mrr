@@ -50,6 +50,13 @@ impl<P> Source<'_, P> {
     }
 }
 
+/// Target points sampled by a `Proposal`, with their importance-sampling weights.
+/// `points[i]` and `weights[i]` belong to the same target.
+pub struct Targets<P> {
+    pub points: Vec<P>,
+    pub weights: Vec<f64>,
+}
+
 /// Proposal over medium for new source points for importance sampling
 pub trait Proposal<M: Medium> {
     /// Sample target atoms according to a proposal, updating weights according to importance sampling
@@ -58,5 +65,5 @@ pub trait Proposal<M: Medium> {
         medium: &M,
         source: &Source<M::Point>,
         streams: &impl SamplerStreams,
-    ) -> (Vec<M::Point>, Vec<f64>);
+    ) -> Targets<M::Point>;
 }
