@@ -1,10 +1,10 @@
 //! Generic, implementation agnostic driver code
 
 mod atoms;
-mod convergence;
-mod driver;
+pub mod convergence;
+pub mod driver;
 mod init;
 mod moments;
 mod proposal;
 mod sampler;
-mod traits;
+pub mod traits;

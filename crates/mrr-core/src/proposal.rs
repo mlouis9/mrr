@@ -1,16 +1,6 @@
 //! Proposals used for importance sampling target atom distributions
-use crate::atoms::Atoms;
 use crate::sampler::{CHUNK_SIZE, SamplerStreams, UnitSampler};
 use crate::traits::{Medium, Proposal, Source};
-
-impl<P> Source<'_, P> {
-    pub fn n_atoms(&self) -> usize {
-        match self {
-            Source::Existing(atoms) => atoms.len(),
-            Source::Initialize(n) => *n,
-        }
-    }
-}
 
 pub struct UniformProposal;
 

@@ -1,6 +1,5 @@
 //! Defines interface traits that are used to express the power iteration updates generically
 use crate::atoms::Atoms;
-use crate::moments::MomentLayout;
 use crate::sampler::SamplerStreams;
 
 /// A medium for the purposes of transport, required for computing optical depths
@@ -51,6 +50,15 @@ pub trait Emission<M: Medium> {
 pub enum Source<'a, P> {
     Existing(&'a Atoms<P>),
     Initialize(usize),
+}
+
+impl<P> Source<'_, P> {
+    pub fn n_atoms(&self) -> usize {
+        match self {
+            Source::Existing(atoms) => atoms.len(),
+            Source::Initialize(n) => *n,
+        }
+    }
 }
 
 /// Proposal over medium for new source points for importance sampling

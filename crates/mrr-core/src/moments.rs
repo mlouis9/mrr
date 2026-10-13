@@ -47,7 +47,11 @@ impl MomentLayout {
 
     /// Create an isotropic angular block in every energy group for a single atom
     pub fn isotropic_white_block(&self) -> Vec<f64> {
-        self.isotropic_angular_block().repeat(self.n_groups)
+        self.isotropic_angular_block()
+            .repeat(self.n_groups)
+            .into_iter()
+            .map(|m| m / self.n_groups as f64) // Divide 1.0 by N_groups so moment block sums to 1
+            .collect()
     }
 
     /// Create a zero block for a single atom

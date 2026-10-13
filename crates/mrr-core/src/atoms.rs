@@ -88,9 +88,9 @@ impl<P> Atoms<P> {
     }
 
     /// When the integral is computed, this method is used to normalize to unity
-    pub fn normalize_moments(&mut self, norm_factor: f64) {
+    pub fn scale_moments(&mut self, factor: f64) {
         for m in self.moments.iter_mut() {
-            *m *= norm_factor;
+            *m *= factor;
         }
     }
 }

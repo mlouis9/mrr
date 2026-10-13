@@ -10,22 +10,24 @@ use crate::{
 };
 
 // Output of simulation
-struct RunResult {
+pub struct RunResult {
     k: f64,
 }
 
 /// Parameters influencing simulation
-struct RunConfig<P> {
+pub struct RunConfig<P> {
     rules: Vec<Box<dyn StoppingRule>>,
-    n_source_atoms: usize, // Number of atoms in empirical source
+    /// Number of atoms in empirical source
+    n_source_atoms: usize,
     max_legendre_order: usize,
     n_groups: usize,
-    seed: u64, // Base seed: every random stream in the run is derived from this
+    /// Base seed: every random stream in the run is derived from this
+    seed: u64,
     proposal: P,
 }
 
 /// Power iteration
-fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
+pub fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
     medium: &M,
     gather: &G,
     emission: &E,
@@ -33,7 +35,7 @@ fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
 ) -> RunResult {
     let mut cycle: usize = 0;
     let mut k: f64 = 0.0;
-    let mut k_prev: f64 = 0.0;
+    let mut k_prev: f64 = -1.0; // Ensure loop runs for at least one iter
 
     // Initialize empirical source (once, before iterating)
     let layout = MomentLayout::from_legendre_order(cfg.max_legendre_order, cfg.n_groups);
@@ -46,8 +48,9 @@ fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
     let mut atoms = isotropic_white_uniform(medium, &layout, cfg.n_source_atoms, &init_streams);
     let proposal = &cfg.proposal;
 
+    // Power iteration
     loop {
-        let info: CycleInfo = CycleInfo { cycle, k, k_prev };
+        let info = CycleInfo { cycle, k, k_prev };
         if cfg.rules.iter().any(|r| r.should_stop(&info)) {
             break;
         }
@@ -56,11 +59,11 @@ fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
         let proposal_streams = RandomStreams {
             base_seed: cfg.seed,
             purpose: purpose::PROPOSAL,
-            cycle: cycle,
+            cycle,
         };
         let (points, weights) =
             proposal.sample_target_atoms(medium, &Source::Existing(&atoms), &proposal_streams);
-        let mut target_atoms = Atoms::new(cfg.n_source_atoms, layout.clone());
+        let mut target_atoms = Atoms::new(cfg.n_source_atoms, layout);
 
         // Create empty atom array from sampled points and weights
         for atom_idx in 0..points.len() {
@@ -82,9 +85,14 @@ fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
         // Normalize and compute k
         k_prev = k;
         k = target_atoms.compute_integral() / medium.volume();
-        target_atoms.normalize_moments(1.0 / k);
+        target_atoms.scale_moments(1.0 / k);
         atoms = target_atoms;
         cycle += 1;
     }
-    RunResult { k: k }
+    RunResult { k }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
 }

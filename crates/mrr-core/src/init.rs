@@ -3,7 +3,7 @@
 use crate::atoms::Atoms;
 use crate::moments::MomentLayout;
 use crate::proposal::UniformProposal;
-use crate::sampler::{CHUNK_SIZE, SamplerStreams, UnitSampler};
+use crate::sampler::SamplerStreams;
 use crate::traits::{Medium, Proposal, Source};
 
 /// Sample atoms isotropic in angle, white in energy, and uniform in space.
