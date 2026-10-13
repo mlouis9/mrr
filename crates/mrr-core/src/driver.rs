@@ -35,14 +35,20 @@ pub struct Problem<M, G, E, P> {
 }
 
 impl<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>> Problem<M, G, E, P> {
+    /// Initialize source
+    fn init_src(&self, cfg: &RunConfig) -> Atoms<M::Point> {
+        let layout =
+            MomentLayout::from_legendre_order(cfg.max_legendre_order, self.medium.n_groups());
+        let init_streams = RandomStreams {
+            base_seed: cfg.seed,
+            purpose: purpose::INIT,
+            cycle: 0,
+        };
+        isotropic_white_uniform(&self.medium, &layout, cfg.n_source_atoms, &init_streams)
+    }
+
     /// Generate proposal atoms
-    fn propose(
-        &self,
-        seed: u64,
-        cycle: usize,
-        atoms: &Atoms<M::Point>,
-        zero_block: &[f64],
-    ) -> Atoms<M::Point> {
+    fn propose(&self, seed: u64, cycle: usize, atoms: &Atoms<M::Point>) -> Atoms<M::Point> {
         let proposal_streams = RandomStreams {
             base_seed: seed,
             purpose: purpose::PROPOSAL,
@@ -54,7 +60,7 @@ impl<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>> Problem<M, G, E, P
             &Source::Existing(atoms),
             &proposal_streams,
         );
-        Atoms::from_targets(points, weights, *layout, zero_block)
+        Atoms::from_targets(points, weights, *layout, &layout.zero_block())
     }
 
     fn gather_flux(&self, atoms: &Atoms<M::Point>, targets: &mut Atoms<M::Point>) {
@@ -97,16 +103,7 @@ pub fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
     let mut k_prev: f64 = -1.0; // Ensure loop runs for at least one iter
 
     // Initialize empirical source (once, before iterating)
-    let layout =
-        MomentLayout::from_legendre_order(cfg.max_legendre_order, problem.medium.n_groups());
-    let zero_block = layout.zero_block();
-    let init_streams = RandomStreams {
-        base_seed: cfg.seed,
-        purpose: purpose::INIT,
-        cycle: 0,
-    };
-    let mut atoms =
-        isotropic_white_uniform(&problem.medium, &layout, cfg.n_source_atoms, &init_streams);
+    let mut atoms = problem.init_src(cfg);
 
     // Power iteration
     loop {
@@ -116,7 +113,7 @@ pub fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
         }
 
         // Sample new points and weights according to proposal
-        let mut targets = problem.propose(cfg.seed, cycle, &atoms, &zero_block);
+        let mut targets = problem.propose(cfg.seed, cycle, &atoms);
 
         // Perform gather
         problem.gather_flux(&atoms, &mut targets);
