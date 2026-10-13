@@ -21,7 +21,7 @@ pub fn isotropic_white_uniform<M: Medium>(
     let block = layout.isotropic_white_block();
     let Targets { points, weights } =
         UniformProposal.sample_target_atoms(medium, &Source::Initialize(n_atoms), streams);
-    Atoms::from_targets(points, weights, *layout, block)
+    Atoms::from_targets(points, weights, *layout, &block)
 }
 
 #[cfg(test)]

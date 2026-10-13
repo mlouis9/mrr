@@ -98,13 +98,13 @@ impl<P: Copy + Clone> Atoms<P> {
         points: Vec<P>,
         weights: Vec<f64>,
         layout: MomentLayout,
-        block: Vec<f64>,
+        block: &[f64],
     ) -> Atoms<P> {
         assert_eq!(points.len(), weights.len());
         assert_eq!(layout.block_len(), block.len());
         let mut atoms = Atoms::new(points.len(), layout);
         for atom_idx in 0..points.len() {
-            atoms.push(points[atom_idx], weights[atom_idx], &block);
+            atoms.push(points[atom_idx], weights[atom_idx], block);
         }
         atoms
     }
