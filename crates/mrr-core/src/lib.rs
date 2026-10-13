@@ -8,3 +8,6 @@ mod moments;
 mod proposal;
 mod sampler;
 pub mod traits;
+
+#[cfg(test)]
+mod test_utils;

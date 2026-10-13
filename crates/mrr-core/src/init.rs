@@ -28,35 +28,14 @@ pub fn isotropic_white_uniform<M: Medium>(
 mod tests {
     use super::*;
     use crate::sampler::{CHUNK_SIZE, GridStreams1D};
+    use crate::test_utils::*;
     use approx;
-
-    /// Minimal 1D medium on [0, width) that accepts every sample
-    struct TestSlab {
-        width: f64,
-    }
-
-    impl Medium for TestSlab {
-        type Point = f64;
-        const SAMPLE_DIM: usize = 1;
-        fn n_groups(&self) -> usize {
-            1
-        }
-        fn optical_depth(&self, _: &f64, _: &f64) -> f64 {
-            0.0
-        }
-        fn volume(&self) -> f64 {
-            self.width
-        }
-        fn map_uniform(&self, u: &[f64]) -> Option<f64> {
-            Some(u[0] * self.width)
-        }
-    }
 
     #[test]
     fn grid_init_is_exact_across_chunks() {
         // More than one chunk, last one partial
         let n = CHUNK_SIZE + 3;
-        let medium = TestSlab { width: 2.0 };
+        let medium = TestSlab::new(2.0, 1, 0.0..1.0);
         let layout = MomentLayout::from_legendre_order(2, 1);
         let atoms = isotropic_white_uniform(&medium, &layout, n, &GridStreams1D { n });
 
