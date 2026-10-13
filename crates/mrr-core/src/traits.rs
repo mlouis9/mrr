@@ -23,26 +23,15 @@ pub trait Medium {
 
 /// An operation that 'gathers' the angular flux contributions of source atoms into a new source point flux
 pub trait Gather<M: Medium> {
-    /// Take the source atoms and gather flux contributions to the target atom (given by its index in the
-    /// target_atoms struct of arrays) to compute the flux moments
-    fn gather(
-        &self,
-        medium: &M,
-        src_atoms: &Atoms<M::Point>,
-        target_atoms: &Atoms<M::Point>,
-        target_idx: usize,
-    ) -> Vec<f64>;
+    /// Take the source atoms and gather flux contributions to the target atom (given by its point)
+    /// to compute the flux moments
+    fn gather(&self, medium: &M, src_atoms: &Atoms<M::Point>, target_point: M::Point) -> Vec<f64>;
 }
 
 /// Computes the emission from a gathered source point flux
 pub trait Emission<M: Medium> {
     /// Compute emission for a single target atom
-    fn compute_emission(
-        &self,
-        medium: &M,
-        target_atoms: &Atoms<M::Point>,
-        target_idx: usize,
-    ) -> Vec<f64>;
+    fn compute_emission(&self, medium: &M, target_moments: &[f64]) -> Vec<f64>;
 }
 
 /// Whether an empirical source is already existing or is being initialized, consequences for

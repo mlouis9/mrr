@@ -72,13 +72,13 @@ pub fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
 
         // Perform gather
         for target_idx in 0..points.len() {
-            let moments = gather.gather(medium, &atoms, &target_atoms, target_idx);
+            let moments = gather.gather(medium, &atoms, points[target_idx]);
             target_atoms.update_atom_moments(target_idx, &moments);
         }
 
         // Compute new emission source
         for target_idx in 0..points.len() {
-            let moments = emission.compute_emission(medium, &target_atoms, target_idx);
+            let moments = emission.compute_emission(medium, target_atoms.atom_moments(target_idx));
             target_atoms.update_atom_moments(target_idx, &moments);
         }
 

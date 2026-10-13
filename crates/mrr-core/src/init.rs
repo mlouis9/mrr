@@ -31,7 +31,7 @@ pub fn isotropic_white_uniform<M: Medium>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sampler::GridStreams1D;
+    use crate::sampler::{CHUNK_SIZE, GridStreams1D};
     use approx;
 
     /// Minimal 1D medium on [0, width) that accepts every sample
