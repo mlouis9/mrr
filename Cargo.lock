@@ -83,6 +83,9 @@ name = "mrr-slab-1d"
 version = "0.1.0"
 dependencies = [
  "mrr-core",
+ "mrr-math",
+ "mrr-xs",
+ "thiserror",
 ]
 
 [[package]]

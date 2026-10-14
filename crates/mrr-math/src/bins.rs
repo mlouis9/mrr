@@ -112,6 +112,54 @@ impl Bins {
         // Number of edges <= x is at least 1 here, so subtracting 1 is safe
         Some(self.edges.partition_point(|&e| e <= x) - 1)
     }
+
+    /// Like [`locate`](Self::locate), but on the *closed* range
+    /// [lower(), upper()]: the top edge belongs to the last bin.
+    ///
+    /// Use this when the whole domain is closed (a slab including its right
+    /// face, an energy grid including its top edge). Interior edges still
+    /// belong to the bin above, exactly as in `locate`.
+    pub fn locate_closed(&self, x: f64) -> Option<usize> {
+        if x == self.upper() {
+            Some(self.n_bins() - 1)
+        } else {
+            self.locate(x)
+        }
+    }
+
+    /// Clip `x` into [lower(), upper()]. NaN stays NaN.
+    pub fn clamp(&self, x: f64) -> f64 {
+        x.clamp(self.lower(), self.upper())
+    }
+
+    /// The bins overlapped by the interval between `a` and `b`, as
+    /// `(bin index, overlap length)` in ascending bin order.
+    ///
+    /// - Order of `a` and `b` does not matter.
+    /// - The interval is clipped to [lower(), upper()] first.
+    /// - Only overlaps of positive length are yielded, so an interval that
+    ///   sits on an edge, is empty (`a == b`), lies outside, or contains NaN
+    ///   yields nothing.
+    /// - The lengths add up to the clipped interval length (up to rounding).
+    pub fn overlaps(&self, a: f64, b: f64) -> impl Iterator<Item = (usize, f64)> + '_ {
+        let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
+        let (lo, hi) = (self.clamp(lo), self.clamp(hi));
+        // Bins that can overlap: from the one containing `lo` up to the one
+        // containing `hi`. If anything is NaN or the interval is empty the
+        // range is empty.
+        let range = if lo < hi {
+            let first = self.locate_closed(lo).unwrap_or(0);
+            let last = self.locate_closed(hi).unwrap_or(0);
+            first..last + 1
+        } else {
+            0..0
+        };
+        range.filter_map(move |i| {
+            let (e0, e1) = self.bin(i);
+            let len = hi.min(e1) - lo.max(e0);
+            (len > 0.0).then_some((i, len))
+        })
+    }
 }
 
 #[cfg(test)]
@@ -213,6 +261,74 @@ mod tests {
         assert_eq!(b.locate(-1e-12), None);
         assert_eq!(b.locate(10.0), None);
         assert_eq!(b.locate(f64::NAN), None);
+    }
+
+    #[test]
+    fn locate_closed_includes_top_edge_only() {
+        let b = bins();
+        assert_eq!(b.locate_closed(4.0), Some(2)); // top edge -> last bin
+        assert_eq!(b.locate_closed(0.0), Some(0));
+        assert_eq!(b.locate_closed(1.0), Some(1)); // interior edges unchanged
+        assert_eq!(b.locate_closed(4.0 + 1e-12), None);
+        assert_eq!(b.locate_closed(f64::NAN), None);
+    }
+
+    fn collect(b: &Bins, x0: f64, x1: f64) -> Vec<(usize, f64)> {
+        b.overlaps(x0, x1).collect()
+    }
+
+    #[test]
+    fn overlaps_within_one_bin() {
+        assert_eq!(collect(&bins(), 0.25, 0.75), vec![(0, 0.5)]);
+    }
+
+    #[test]
+    fn overlaps_across_bins_in_ascending_order() {
+        let b = bins();
+        assert_eq!(collect(&b, 0.5, 2.0), vec![(0, 0.5), (1, 0.5), (2, 0.5)]);
+        // Reversed endpoints give the same answer
+        assert_eq!(collect(&b, 2.0, 0.5), collect(&b, 0.5, 2.0));
+    }
+
+    #[test]
+    fn overlaps_whole_domain_including_top_edge() {
+        let b = bins();
+        assert_eq!(collect(&b, 0.0, 4.0), vec![(0, 1.0), (1, 0.5), (2, 2.5)]);
+    }
+
+    #[test]
+    fn overlaps_starting_or_ending_on_interior_edges() {
+        let b = bins();
+        assert_eq!(collect(&b, 1.0, 1.5), vec![(1, 0.5)]); // no zero-length bits
+        assert_eq!(collect(&b, 0.5, 1.0), vec![(0, 0.5)]);
+    }
+
+    #[test]
+    fn overlaps_degenerate_cases_are_empty() {
+        let b = bins();
+        assert!(collect(&b, 1.0, 1.0).is_empty()); // empty interval on an edge
+        assert!(collect(&b, 0.3, 0.3).is_empty());
+        assert!(collect(&b, 5.0, 6.0).is_empty()); // outside
+        assert!(collect(&b, 4.0, 4.0).is_empty());
+        assert!(collect(&b, f64::NAN, 1.0).is_empty());
+    }
+
+    #[test]
+    fn overlaps_are_clipped_to_the_domain() {
+        assert_eq!(collect(&bins(), -1.0, 0.5), vec![(0, 0.5)]);
+        assert_eq!(collect(&bins(), 3.0, 9.0), vec![(2, 1.0)]);
+    }
+
+    #[test]
+    fn overlap_lengths_sum_to_interval_length() {
+        let b = bins();
+        for i in 0..=20 {
+            for j in 0..=20 {
+                let (x0, x1) = (0.2 * i as f64, 0.2 * j as f64);
+                let total: f64 = b.overlaps(x0, x1).map(|(_, l)| l).sum();
+                assert!((total - (x1 - x0).abs()).abs() < 1e-12, "{x0} {x1}");
+            }
+        }
     }
 
     #[test]

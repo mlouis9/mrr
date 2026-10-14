@@ -56,10 +56,8 @@ impl EnergyGroups {
 
     /// Group containing energy `e` (eV), or `None` outside the structure or NaN
     pub fn group_of(&self, e: f64) -> Option<usize> {
-        if e == self.bins.upper() {
-            return Some(0); // top edge belongs to the highest group
-        }
-        self.bins.locate(e).map(|i| self.group_of_bin(i))
+        // Closed range: the top edge belongs to the highest group
+        self.bins.locate_closed(e).map(|i| self.group_of_bin(i))
     }
 
     // The only two places that know groups and bins run in opposite directions
