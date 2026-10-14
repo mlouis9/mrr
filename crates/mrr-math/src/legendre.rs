@@ -35,6 +35,33 @@ pub fn legendre(l: usize, mu: f64) -> f64 {
     p
 }
 
+/// Monomial coefficients of P_0 … P_max_order: `out[l][n]` is the
+/// coefficient of m^n in P_l(m), so `out[l].len() == l + 1`.
+///
+/// Built with Bonnet's recurrence applied to coefficient vectors:
+/// a^(l+1) = ((2l+1) m·a^(l) − l a^(l−1)) / (l+1).
+/// Exact rationals in principle; the alternating signs make monomial sums
+/// cancel badly for large l, so keep l ≲ 8.
+pub fn legendre_monomials(max_order: usize) -> Vec<Vec<f64>> {
+    let mut a: Vec<Vec<f64>> = vec![vec![1.0]];
+    if max_order >= 1 {
+        a.push(vec![0.0, 1.0]);
+    }
+    for l in 1..max_order {
+        let lf = l as f64;
+        let mut next = vec![0.0; l + 2];
+        for (n, &c) in a[l].iter().enumerate() {
+            next[n + 1] += (2.0 * lf + 1.0) * c; // shift up one power of m
+        }
+        for (n, &c) in a[l - 1].iter().enumerate() {
+            next[n] -= lf * c;
+        }
+        next.iter_mut().for_each(|c| *c /= lf + 1.0);
+        a.push(next);
+    }
+    a
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -78,5 +105,26 @@ mod tests {
         let mut one = [9.0];
         legendre_all(0.5, &mut one);
         assert_eq!(one, [1.0]);
+    }
+
+    #[test]
+    fn monomials_match_closed_forms() {
+        let a = legendre_monomials(3);
+        assert_eq!(a[0], vec![1.0]);
+        assert_eq!(a[1], vec![0.0, 1.0]);
+        assert_eq!(a[2], vec![-0.5, 0.0, 1.5]);
+        assert_eq!(a[3], vec![0.0, -1.5, 0.0, 2.5]);
+    }
+
+    #[test]
+    fn monomials_evaluate_to_legendre() {
+        let a = legendre_monomials(8);
+        for (l, coeffs) in a.iter().enumerate() {
+            assert_eq!(coeffs.len(), l + 1);
+            for &m in &[0.0, 0.1, 0.5, 0.77, 1.0] {
+                let p: f64 = coeffs.iter().rev().fold(0.0, |acc, &c| acc * m + c);
+                assert!(close(p, legendre(l, m)), "l={l} m={m}");
+            }
+        }
     }
 }

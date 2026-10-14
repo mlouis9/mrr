@@ -33,6 +33,17 @@ pub fn expn(n: u32, x: f64) -> f64 {
     }
 }
 
+/// Fill `out[k] = E_{k+1}(x)` for k in `0..out.len()`.
+///
+/// Each order is evaluated directly with `expn`. (The upward recurrence
+/// E_{n+1} = (e^{-x} − x E_n)/n is cheaper but unstable once x ≳ n; switch
+/// to it for small x if this ever shows up in a profile.)
+pub fn expn_all(x: f64, out: &mut [f64]) {
+    for (k, e) in out.iter_mut().enumerate() {
+        *e = expn(k as u32 + 1, x);
+    }
+}
+
 /// Continued fraction for x > 1, evaluated with the modified Lentz method
 fn continued_fraction(n: u32, x: f64) -> f64 {
     let nm1 = n as f64 - 1.0;
@@ -156,5 +167,25 @@ mod tests {
     #[should_panic(expected = "requires x >= 0")]
     fn negative_argument_panics() {
         expn(1, -1.0);
+    }
+
+    #[test]
+    fn expn_all_matches_expn_and_recurrence() {
+        let mut e = [0.0; 7];
+        for &x in &[0.0, 0.05, 0.9, 1.0, 1.1, 3.0, 20.0] {
+            expn_all(x, &mut e);
+            for (k, &v) in e.iter().enumerate() {
+                assert_eq!(v, expn(k as u32 + 1, x));
+            }
+            if x > 0.0 {
+                // E_{n+1} = (e^{-x} - x E_n) / n, checked where it is stable
+                for n in 1..e.len() {
+                    if x < n as f64 {
+                        let r = ((-x).exp() - x * e[n - 1]) / n as f64;
+                        assert!((r - e[n]).abs() <= 1e-13 * e[n].abs() + 1e-300);
+                    }
+                }
+            }
+        }
     }
 }

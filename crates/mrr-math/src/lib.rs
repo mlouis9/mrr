@@ -8,6 +8,8 @@ pub mod expint;
 pub mod group_matrix;
 pub mod legendre;
 pub mod quadrature;
+pub mod transfer;
 
 pub use bins::Bins;
 pub use group_matrix::GroupMatrix;
+pub use transfer::TransferTensor;
