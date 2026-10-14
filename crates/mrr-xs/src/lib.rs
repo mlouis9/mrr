@@ -11,3 +11,4 @@ pub use energy::EnergyGroups;
 pub use error::XsError;
 pub use library::MaterialLibrary;
 pub use material::{MgMaterial, MgMaterialData};
+pub use optical::optical_depths;
