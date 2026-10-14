@@ -12,6 +12,7 @@ pub mod traits;
 
 pub use atoms::Atoms;
 pub use driver::{Problem, RunConfig, RunResult, power_iterate};
+pub use geometry::{MaterialId, Segment};
 pub use moments::MomentLayout;
 pub use traits::{Emission, Emitted, Gather, Geometry, Proposal};
 
