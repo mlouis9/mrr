@@ -36,6 +36,23 @@ pub enum XsError {
         index: usize,
     },
 
+    #[error("material '{material}': field '{field}' has a non-finite value at index {index}")]
+    NonFinite {
+        material: String,
+        field: &'static str,
+        index: usize,
+    },
+
+    #[error("material '{material}': scattering order {order}: {source}")]
+    ScatterMatrix {
+        material: String,
+        order: usize,
+        source: GroupMatrixError,
+    },
+
+    #[error("material '{material}' is already in the library")]
+    DuplicateName { material: String },
+
     #[error("material '{material}': fission spectrum chi sums to {sum}, expected 1")]
     ChiNotNormalized { material: String, sum: f64 },
 
