@@ -1,17 +1,18 @@
-//! Defines interface traits that are used to express the power iteration updates generically
+//! Defines interface traits that are used to express the power iteration updates generically.
+//!
+//! `mrr-core` knows about geometry (where points are, how to sample them) and
+//! the algorithm. It deliberately knows nothing about cross sections, energy
+//! groups vs. continuous energy, or optical depth: those live entirely inside
+//! the `Gather` and `Emission` implementations of a physics crate.
 use crate::atoms::Atoms;
 use crate::sampler::SamplerStreams;
 
-/// A medium for the purposes of transport, required for computing optical depths
-pub trait Medium {
+/// The spatial domain: what a point is, its volume, and how to sample it uniformly.
+/// Energy-independent by design.
+pub trait Geometry {
     type Point: Copy + Clone;
 
     const SAMPLE_DIM: usize;
-
-    fn n_groups(&self) -> usize;
-
-    /// Optical depth τ(a, b) = ∫ Σ_t,g along the straight line from a to b.
-    fn optical_depth(&self, x: &Self::Point, x_prime: &Self::Point) -> f64;
 
     /// Volume of the domain (length in a slab).
     fn volume(&self) -> f64;
@@ -22,16 +23,28 @@ pub trait Medium {
 }
 
 /// An operation that 'gathers' the angular flux contributions of source atoms into a new source point flux
-pub trait Gather<M: Medium> {
+pub trait Gather<G: Geometry> {
     /// Take the source atoms and gather flux contributions to the target atom (given by its point)
     /// to compute the flux moments
-    fn gather(&self, medium: &M, src_atoms: &Atoms<M::Point>, target_point: M::Point) -> Vec<f64>;
+    fn gather(&self, geometry: &G, src_atoms: &Atoms<G::Point>, target_point: G::Point)
+    -> Vec<f64>;
+}
+
+/// Emission moments at one point, split into scattering and fission parts.
+///
+/// `fission` is returned *without* the 1/k factor: the driver determines k
+/// from the integrals of the two parts and combines them as
+/// `scattering + fission / k`. Both blocks use the run's `MomentLayout`.
+pub struct Emitted {
+    pub scattering: Vec<f64>,
+    pub fission: Vec<f64>,
 }
 
 /// Computes the emission from a gathered source point flux
-pub trait Emission<M: Medium> {
-    /// Compute emission for a single target atom
-    fn compute_emission(&self, medium: &M, target_moments: &[f64]) -> Vec<f64>;
+pub trait Emission<G: Geometry> {
+    /// Compute emission at `point` (used to find the local material) from the
+    /// flux moments gathered there
+    fn compute_emission(&self, geometry: &G, point: G::Point, flux_moments: &[f64]) -> Emitted;
 }
 
 /// Whether an empirical source is already existing or is being initialized, consequences for
@@ -57,13 +70,13 @@ pub struct Targets<P> {
     pub weights: Vec<f64>,
 }
 
-/// Proposal over medium for new source points for importance sampling
-pub trait Proposal<M: Medium> {
+/// Proposal over geometry for new source points for importance sampling
+pub trait Proposal<G: Geometry> {
     /// Sample target atoms according to a proposal, updating weights according to importance sampling
     fn sample_target_atoms(
         &self,
-        medium: &M,
-        source: &Source<M::Point>,
+        geometry: &G,
+        source: &Source<G::Point>,
         streams: &impl SamplerStreams,
-    ) -> Targets<M::Point>;
+    ) -> Targets<G::Point>;
 }

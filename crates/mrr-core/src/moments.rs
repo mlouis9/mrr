@@ -2,8 +2,12 @@
 use std::ops::Range;
 
 /// Shape of one point's moment block: `n_moments` angular moments for each
-/// of `n_groups` energy groups, stored group-major (all moments of group 0,
-/// then all of group 1, ...).
+/// of `n_groups` energy bins, stored group-major (all moments of bin 0,
+/// then all of bin 1, ...).
+///
+/// `n_groups` is the number of energy bins carried *per atom*: G for
+/// multigroup (energy stored as a block), 1 for continuous energy (energy
+/// stored in the atom's point instead). Nothing here assumes which.
 ///
 /// Moments are indexed by a flat index `k`. In 1D, k = ℓ. In 3D the mapping
 /// from (ℓ, m) to k is defined in `mrr_math`, not here
@@ -52,6 +56,12 @@ impl MomentLayout {
             .into_iter()
             .map(|m| m / self.n_groups as f64) // Divide 1.0 by N_groups so moment block sums to 1
             .collect()
+    }
+
+    /// Integral of one atom's block over angle and energy: the sum of the
+    /// l = 0 moments over all energy bins
+    pub fn block_integral(&self, block: &[f64]) -> f64 {
+        self.moment_l_indices(0).map(|i| block[i]).sum()
     }
 
     /// Create a zero block for a single atom

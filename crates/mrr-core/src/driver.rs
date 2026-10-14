@@ -6,7 +6,7 @@ use crate::{
     init::isotropic_white_uniform,
     moments::MomentLayout,
     sampler::{RandomStreams, purpose},
-    traits::{Emission, Gather, Medium, Proposal, Source, Targets},
+    traits::{Emission, Emitted, Gather, Geometry, Proposal, Source, Targets},
 };
 
 /// Output of simulation
@@ -22,7 +22,6 @@ pub struct RunConfig {
     pub rules: Vec<Box<dyn StoppingRule>>,
     /// Number of atoms in empirical source
     pub n_source_atoms: usize,
-    pub max_legendre_order: usize,
     /// Base seed: every random stream in the run is derived from this
     pub seed: u64,
 }
@@ -30,17 +29,21 @@ pub struct RunConfig {
 /// Contains the specification of the "problem" distinct from the parameters (often compute-dependent
 /// numerical parameters). Note for some fields this distinction is somewhat contrived, but it is
 /// useful for managing complexity regardless
-pub struct Problem<M, G, E, P> {
-    medium: M,
-    gather: G,
+pub struct Problem<G, K, E, P> {
+    geometry: G,
+    /// Moment block carried by each atom (angular order x energy bins). Set by
+    /// whoever builds the physics, since it knows the energy representation.
+    layout: MomentLayout,
+    gather: K,
     emission: E,
     proposal: P,
 }
 
-impl<M, G, E, P> Problem<M, G, E, P> {
-    pub fn new(medium: M, gather: G, emission: E, proposal: P) -> Self {
+impl<G, K, E, P> Problem<G, K, E, P> {
+    pub fn new(geometry: G, layout: MomentLayout, gather: K, emission: E, proposal: P) -> Self {
         Self {
-            medium,
+            geometry,
+            layout,
             gather,
             emission,
             proposal,
@@ -48,21 +51,24 @@ impl<M, G, E, P> Problem<M, G, E, P> {
     }
 }
 
-impl<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>> Problem<M, G, E, P> {
+impl<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal<G>> Problem<G, K, E, P> {
     /// Initialize source
-    fn init_src(&self, cfg: &RunConfig) -> Atoms<M::Point> {
-        let layout =
-            MomentLayout::from_legendre_order(cfg.max_legendre_order, self.medium.n_groups());
+    fn init_src(&self, cfg: &RunConfig) -> Atoms<G::Point> {
         let init_streams = RandomStreams {
             base_seed: cfg.seed,
             purpose: purpose::INIT,
             cycle: 0,
         };
-        isotropic_white_uniform(&self.medium, &layout, cfg.n_source_atoms, &init_streams)
+        isotropic_white_uniform(
+            &self.geometry,
+            &self.layout,
+            cfg.n_source_atoms,
+            &init_streams,
+        )
     }
 
     /// Generate proposal atoms
-    fn propose(&self, seed: u64, cycle: usize, atoms: &Atoms<M::Point>) -> Atoms<M::Point> {
+    fn propose(&self, seed: u64, cycle: usize, atoms: &Atoms<G::Point>) -> Atoms<G::Point> {
         let proposal_streams = RandomStreams {
             base_seed: seed,
             purpose: purpose::PROPOSAL,
@@ -70,33 +76,62 @@ impl<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>> Problem<M, G, E, P
         };
         let layout = atoms.layout();
         let Targets { points, weights } = self.proposal.sample_target_atoms(
-            &self.medium,
+            &self.geometry,
             &Source::Existing(atoms),
             &proposal_streams,
         );
         Atoms::from_targets(points, weights, *layout, &layout.zero_block())
     }
 
-    fn gather_flux(&self, atoms: &Atoms<M::Point>, targets: &mut Atoms<M::Point>) {
+    fn gather_flux(&self, atoms: &Atoms<G::Point>, targets: &mut Atoms<G::Point>) {
         for target_idx in 0..targets.len() {
             let point = targets.points()[target_idx];
-            let moments = self.gather.gather(&self.medium, atoms, point);
+            let moments = self.gather.gather(&self.geometry, atoms, point);
             targets.update_atom_moments(target_idx, &moments);
         }
     }
 
-    fn apply_emission(&self, targets: &mut Atoms<M::Point>) {
+    /// Replace each target's flux moments by its emission moments and return k.
+    ///
+    /// Emission gives scattering (Q_s) and fission (Q_f, without 1/k) parts.
+    /// The source is normalized so that its integral is V, and
+    /// Q = Q_s + Q_f / k, so V = Phi(Q_s) + Phi(Q_f) / k, giving
+    ///     k = Phi(Q_f) / (V - Phi(Q_s)).
+    /// Combining the parts with this k makes the new source integrate to V
+    /// by construction, so no separate rescaling step is needed.
+    fn emit_and_normalize(&self, targets: &mut Atoms<G::Point>) -> f64 {
+        let layout = self.layout;
+        let mut emitted: Vec<Emitted> = Vec::with_capacity(targets.len());
+        let (mut phi_s, mut phi_f) = (0.0, 0.0);
         for target_idx in 0..targets.len() {
-            let moments = self
-                .emission
-                .compute_emission(&self.medium, targets.atom_moments(target_idx));
+            let point = targets.points()[target_idx];
+            let weight = targets.weights()[target_idx];
+            let e = self.emission.compute_emission(
+                &self.geometry,
+                point,
+                targets.atom_moments(target_idx),
+            );
+            phi_s += weight * layout.block_integral(&e.scattering);
+            phi_f += weight * layout.block_integral(&e.fission);
+            emitted.push(e);
+        }
+
+        let denom = self.geometry.volume() - phi_s;
+        assert!(
+            phi_f > 0.0 && denom > 0.0,
+            "cannot determine k: Phi(Q_f) = {phi_f:e}, V - Phi(Q_s) = {denom:e}"
+        );
+        let k = phi_f / denom;
+
+        for (target_idx, e) in emitted.iter().enumerate() {
+            let moments: Vec<f64> = e
+                .scattering
+                .iter()
+                .zip(&e.fission)
+                .map(|(s, f)| s + f / k)
+                .collect();
             targets.update_atom_moments(target_idx, &moments);
         }
-    }
-
-    fn normalize(&self, targets: &mut Atoms<M::Point>) -> f64 {
-        let k = targets.compute_integral() / self.medium.volume();
-        targets.scale_moments(1.0 / k);
         k
     }
 }
@@ -107,8 +142,8 @@ fn should_stop(cfg: &RunConfig, info: &CycleInfo) -> bool {
 }
 
 /// Power iteration
-pub fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
-    problem: &Problem<M, G, E, P>,
+pub fn power_iterate<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal<G>>(
+    problem: &Problem<G, K, E, P>,
     cfg: &RunConfig,
 ) -> RunResult {
     // Initialize loop parameters
@@ -132,11 +167,8 @@ pub fn power_iterate<M: Medium, G: Gather<M>, E: Emission<M>, P: Proposal<M>>(
         // Perform gather
         problem.gather_flux(&atoms, &mut targets);
 
-        // Compute new emission source
-        problem.apply_emission(&mut targets);
-
-        // Normalize and compute k
-        (k_prev, k) = (k, problem.normalize(&mut targets));
+        // Compute new emission source, k, and normalize
+        (k_prev, k) = (k, problem.emit_and_normalize(&mut targets));
         atoms = targets;
         cycle += 1;
     }
@@ -150,33 +182,49 @@ mod tests {
     use crate::proposal::UniformProposal;
     use crate::test_utils::*;
 
-    /// With a gather that always returns the isotropic white block and an
-    /// identity emission, every cycle reproduces a source of integral V, so
-    /// k must be exactly 1 and the run must stop after MaxCycles cycles.
-    /// This exercises init, proposal, gather, emission, normalization and
-    /// stopping together.
-    #[test]
-    fn steady_source_gives_k_one_and_stops_at_max_cycles() {
-        let n_groups = 3;
+    /// Run with a gather that always returns the isotropic white block (whose
+    /// integral over the source is V) and the given emission split.
+    fn run(scatter: f64, fission: f64, n_groups: usize) -> (RunResult, f64) {
         let max_order = 2;
-        let medium = TestSlab::new(1.5, n_groups, 0.0..1.0);
-        let block = MomentLayout::from_legendre_order(max_order, n_groups).isotropic_white_block();
+        let geometry = TestSlab::new(1.5, 0.0..1.0);
+        let volume = geometry.volume();
+        let layout = MomentLayout::from_legendre_order(max_order, n_groups);
         let problem = Problem::new(
-            medium,
-            ConstGather::new(block),
-            IdentityEmission::new(),
+            geometry,
+            layout,
+            ConstGather::new(layout.isotropic_white_block()),
+            ScaledEmission::new(scatter, fission),
             UniformProposal,
         );
         let cfg = RunConfig {
             rules: vec![Box::new(MaxCycles::new(5))],
             n_source_atoms: 500,
-            max_legendre_order: max_order,
             seed: 11,
         };
+        (power_iterate(&problem, &cfg), volume)
+    }
 
-        let result = power_iterate(&problem, &cfg);
-
+    /// Fission-only emission of the gathered flux reproduces a source of
+    /// integral V, so k must be exactly 1. This exercises init, proposal,
+    /// gather, emission, normalization and stopping together.
+    #[test]
+    fn steady_source_gives_k_one_and_stops_at_max_cycles() {
+        let (result, _) = run(0.0, 1.0, 3);
         assert_eq!(result.cycles, 5);
         assert_close(result.k, 1.0);
+    }
+
+    /// With Phi(flux) = V, Q_s = c * flux and Q_f = f * flux give
+    /// k = f V / (V - c V) = f / (1 - c).
+    #[test]
+    fn k_follows_scatter_fission_split() {
+        let (result, _) = run(0.5, 0.6, 2);
+        assert_close(result.k, 0.6 / (1.0 - 0.5));
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot determine k")]
+    fn pure_scattering_has_no_k() {
+        run(0.9, 0.0, 1);
     }
 }

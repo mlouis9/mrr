@@ -4,7 +4,7 @@ use crate::atoms::Atoms;
 use crate::moments::MomentLayout;
 use crate::proposal::UniformProposal;
 use crate::sampler::SamplerStreams;
-use crate::traits::{Medium, Proposal, Source, Targets};
+use crate::traits::{Geometry, Proposal, Source, Targets};
 
 /// Sample atoms isotropic in angle, white in energy, and uniform in space.
 ///
@@ -12,15 +12,15 @@ use crate::traits::{Medium, Proposal, Source, Targets};
 /// (see `sampler.rs`), and the chunks are then joined in chunk order. Because
 /// no chunk depends on another, the `map` below can later become a rayon
 /// `into_par_iter()` without changing the result.
-pub fn isotropic_white_uniform<M: Medium>(
-    medium: &M,
+pub fn isotropic_white_uniform<G: Geometry>(
+    geometry: &G,
     layout: &MomentLayout,
     n_atoms: usize,
     streams: &impl SamplerStreams,
-) -> Atoms<M::Point> {
+) -> Atoms<G::Point> {
     let block = layout.isotropic_white_block();
     let Targets { points, weights } =
-        UniformProposal.sample_target_atoms(medium, &Source::Initialize(n_atoms), streams);
+        UniformProposal.sample_target_atoms(geometry, &Source::Initialize(n_atoms), streams);
     Atoms::from_targets(points, weights, *layout, &block)
 }
 
@@ -34,9 +34,9 @@ mod tests {
     fn grid_init_is_exact_across_chunks() {
         // More than one chunk, last one partial
         let n = CHUNK_SIZE + 3;
-        let medium = TestSlab::new(2.0, 1, 0.0..1.0);
+        let geometry = TestSlab::new(2.0, 0.0..1.0);
         let layout = MomentLayout::from_legendre_order(2, 1);
-        let atoms = isotropic_white_uniform(&medium, &layout, n, &GridStreams1D::new(n));
+        let atoms = isotropic_white_uniform(&geometry, &layout, n, &GridStreams1D::new(n));
 
         assert_eq!(atoms.len(), n);
         for (i, &x) in atoms.points().iter().enumerate() {
@@ -46,10 +46,10 @@ mod tests {
             atoms
                 .weights()
                 .iter()
-                .all(|&w| w == medium.volume() / n as f64)
+                .all(|&w| w == geometry.volume() / n as f64)
         );
         let sum = atoms.weights().iter().sum::<f64>();
-        assert_close(sum, medium.volume());
+        assert_close(sum, geometry.volume());
     }
 
     /// The isotropic white source integrates to V for any number of groups,
@@ -58,16 +58,16 @@ mod tests {
     fn check_isotropic_white_source(n_groups: usize) {
         let max_order = 3;
         let n_atoms = CHUNK_SIZE + 3;
-        let medium = TestSlab::new(1.5, n_groups, 0.0..1.0);
-        let layout = MomentLayout::from_legendre_order(max_order, medium.n_groups());
+        let geometry = TestSlab::new(1.5, 0.0..1.0);
+        let layout = MomentLayout::from_legendre_order(max_order, n_groups);
         let streams = RandomStreams {
             base_seed: 1,
             purpose: purpose::INIT,
             cycle: 0,
         };
-        let atoms = isotropic_white_uniform(&medium, &layout, n_atoms, &streams);
+        let atoms = isotropic_white_uniform(&geometry, &layout, n_atoms, &streams);
 
-        assert_close(atoms.compute_integral(), medium.volume());
+        assert_close(atoms.compute_integral(), geometry.volume());
         assert_all_close(atoms.atom_moments(0), &layout.isotropic_white_block());
         assert_close(
             atoms.atom_moments(0)[layout.index(0, 0)],

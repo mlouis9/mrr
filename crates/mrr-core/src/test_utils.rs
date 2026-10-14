@@ -1,36 +1,25 @@
-use crate::traits::{Emission, Gather, Medium};
+use crate::traits::{Emission, Emitted, Gather, Geometry};
 use std::ops::Range;
 
 pub(crate) const RTOL: f64 = 1e-12;
 pub(crate) const ATOL: f64 = 1e-14;
 
-/// Minimal 1D medium on [0, width) that accepts every sample
+/// Minimal 1D geometry on [0, width) that accepts every sample
 pub(crate) struct TestSlab {
     pub width: f64,
-    pub n_groups: usize,
     /// Test acceptance range for u\in[0,1) for rejection sampling
     accept: Range<f64>,
 }
 
 impl TestSlab {
-    pub(crate) fn new(width: f64, n_groups: usize, accept: Range<f64>) -> Self {
-        Self {
-            width,
-            n_groups,
-            accept,
-        }
+    pub(crate) fn new(width: f64, accept: Range<f64>) -> Self {
+        Self { width, accept }
     }
 }
 
-impl Medium for TestSlab {
+impl Geometry for TestSlab {
     type Point = f64;
     const SAMPLE_DIM: usize = 1;
-    fn n_groups(&self) -> usize {
-        self.n_groups
-    }
-    fn optical_depth(&self, _: &f64, _: &f64) -> f64 {
-        0.0
-    }
     fn volume(&self) -> f64 {
         self.width * (self.accept.end - self.accept.start)
     }
@@ -54,29 +43,37 @@ impl ConstGather {
     }
 }
 
-impl<M: Medium> Gather<M> for ConstGather {
+impl<G: Geometry> Gather<G> for ConstGather {
     fn gather(
         &self,
-        _medium: &M,
-        _src_atoms: &crate::atoms::Atoms<<M as Medium>::Point>,
-        _target_point: <M as Medium>::Point,
+        _geometry: &G,
+        _src_atoms: &crate::atoms::Atoms<<G as Geometry>::Point>,
+        _target_point: <G as Geometry>::Point,
     ) -> Vec<f64> {
         self.block.clone()
     }
 }
 
-/// Emission that returns the flux moments it was supplied
-pub(crate) struct IdentityEmission;
+/// Emission that returns fixed multiples of the flux as its scattering and
+/// fission parts. If the gathered flux integrates to V, then
+/// k = fission * V / (V - scatter * V) = fission / (1 - scatter).
+pub(crate) struct ScaledEmission {
+    scatter: f64,
+    fission: f64,
+}
 
-impl IdentityEmission {
-    pub(crate) fn new() -> Self {
-        Self {}
+impl ScaledEmission {
+    pub(crate) fn new(scatter: f64, fission: f64) -> Self {
+        Self { scatter, fission }
     }
 }
 
-impl<M: Medium> Emission<M> for IdentityEmission {
-    fn compute_emission(&self, _medium: &M, target_moments: &[f64]) -> Vec<f64> {
-        target_moments.to_vec()
+impl<G: Geometry> Emission<G> for ScaledEmission {
+    fn compute_emission(&self, _geometry: &G, _point: G::Point, flux_moments: &[f64]) -> Emitted {
+        Emitted {
+            scattering: flux_moments.iter().map(|m| self.scatter * m).collect(),
+            fission: flux_moments.iter().map(|m| self.fission * m).collect(),
+        }
     }
 }
 

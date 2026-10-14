@@ -77,13 +77,7 @@ impl<P: Copy + Clone> Atoms<P> {
         self.moments
             .chunks_exact(self.layout.block_len()) // Create an iterator of atoms by chunking by block_len
             .zip(self.weights()) // Zip moments and weights iterator of (block, w)
-            .map(|(block, &w)| {
-                w * self
-                    .layout
-                    .moment_l_indices(0)
-                    .map(|i| block[i])
-                    .sum::<f64>() // Sum of moment 0 over energies using iterator mapping
-            })
+            .map(|(block, &w)| w * self.layout.block_integral(block))
             .sum() // Sum over atoms
     }
 
