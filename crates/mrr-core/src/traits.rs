@@ -5,6 +5,7 @@
 //! groups vs. continuous energy, or optical depth: those live entirely inside
 //! the `Gather` and `Emission` implementations of a physics crate.
 use crate::atoms::Atoms;
+use crate::geometry::{MaterialId, Segment};
 use crate::sampler::SamplerStreams;
 
 /// The spatial domain: what a point is, its volume, and how to sample it uniformly.
@@ -79,4 +80,14 @@ pub trait Proposal<G: Geometry> {
         source: &Source<G::Point>,
         streams: &impl SamplerStreams,
     ) -> Targets<G::Point>;
+}
+
+/// A geometry that knows its materials and can trace straight paths.
+pub trait Tracer: Geometry {
+    /// Material at `p`, or None outside the domain.
+    fn material_at(&self, p: &Self::Point) -> Option<MaterialId>;
+
+    /// Segments of the straight path from `from` to `to`, in order.
+    /// Clears `out` first; reuses its allocation across calls.
+    fn trace(&self, from: &Self::Point, to: &Self::Point, out: &mut Vec<Segment>);
 }
