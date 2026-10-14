@@ -30,7 +30,11 @@ impl<'a> SlabEmission<'a> {
 impl Emission<Slab1D> for SlabEmission<'_> {
     fn compute_emission(&self, geometry: &Slab1D, point: f64, phi: &[f64]) -> Emitted {
         let layout = self.layout;
-        assert_eq!(phi.len(), layout.block_len(), "flux block has the wrong layout");
+        assert_eq!(
+            phi.len(),
+            layout.block_len(),
+            "flux block has the wrong layout"
+        );
         let id = geometry
             .material_at(&point)
             .unwrap_or_else(|| panic!("emission point {point} is outside the slab"));
@@ -58,7 +62,10 @@ impl Emission<Slab1D> for SlabEmission<'_> {
                 fission[layout.index(0, g)] = chi * production;
             }
         }
-        Emitted { scattering, fission }
+        Emitted {
+            scattering,
+            fission,
+        }
     }
 }
 
@@ -131,8 +138,14 @@ mod tests {
         assert!(water.fission.iter().all(|&f| f == 0.0));
         assert!(close(water.scattering[0], 0.2 * 2.0));
         // Interface belongs to the region on its right, right face is inside
-        assert_eq!(em.compute_emission(&slab, 1.0, &PHI).scattering, water.scattering);
-        assert_eq!(em.compute_emission(&slab, 2.0, &PHI).scattering, water.scattering);
+        assert_eq!(
+            em.compute_emission(&slab, 1.0, &PHI).scattering,
+            water.scattering
+        );
+        assert_eq!(
+            em.compute_emission(&slab, 2.0, &PHI).scattering,
+            water.scattering
+        );
     }
 
     #[test]

@@ -73,7 +73,12 @@ impl Gather<Slab1D> for ExactGather<'_> {
         };
         let mut phi = self.layout.zero_block();
 
-        for (i, (&z_i, &w_i)) in src_atoms.points().iter().zip(src_atoms.weights()).enumerate() {
+        for (i, (&z_i, &w_i)) in src_atoms
+            .points()
+            .iter()
+            .zip(src_atoms.weights())
+            .enumerate()
+        {
             if target == z_i {
                 continue; // see module docs
             }
@@ -91,7 +96,11 @@ impl Gather<Slab1D> for ExactGather<'_> {
                         if q_lp == 0.0 {
                             continue; // avoids 0·∞ at τ = 0 in a void
                         }
-                        let sign = if right || (l + lp) % 2 == 0 { 1.0 } else { -1.0 };
+                        let sign = if right || (l + lp) % 2 == 0 {
+                            1.0
+                        } else {
+                            -1.0
+                        };
                         acc += self.half_norm[lp] * sign * s.m[l * n_mom + lp] * q_lp;
                     }
                     phi[self.layout.index(l, g)] += w_i * acc;
@@ -151,7 +160,11 @@ mod tests {
         assert!(close(right[1], 0.5 * 0.5 * 2.0 * expn(2, tau)));
         // Same distance on the left (atom at 1.0, target at 2.5 vs atom at
         // 2.5, target at 1.0): φ0 unchanged, φ1 flips sign
-        let left = gather.gather(&slab, &one_atom(gather.layout(), 2.5, 0.5, &[2.0, 0.0]), 1.0);
+        let left = gather.gather(
+            &slab,
+            &one_atom(gather.layout(), 2.5, 0.5, &[2.0, 0.0]),
+            1.0,
+        );
         assert!(close(left[0], right[0]));
         assert!(close(left[1], -right[1]));
     }
@@ -279,7 +292,11 @@ mod tests {
         let lib = library(1, &[&[0.0]]);
         let slab = Slab1D::homogeneous(2.0, MaterialId(0)).unwrap();
         let gather = ExactGather::new(&lib);
-        let phi = gather.gather(&slab, &one_atom(gather.layout(), 0.5, 1.0, &[1.0, 0.0]), 1.5);
+        let phi = gather.gather(
+            &slab,
+            &one_atom(gather.layout(), 0.5, 1.0, &[1.0, 0.0]),
+            1.5,
+        );
         assert!(phi[0].is_infinite() && phi[0] > 0.0);
         assert!(close(phi[1], 0.5));
     }

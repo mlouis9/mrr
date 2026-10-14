@@ -20,6 +20,10 @@ pub enum SlabError {
     /// geometry refers to a material the library does not contain
     #[error("slab problem: {0}")]
     Xs(#[from] XsError),
+
+    /// A region names a material that is not in the library
+    #[error("region {region} uses unknown material '{name}'")]
+    UnknownMaterialName { region: usize, name: String },
 }
 
 #[cfg(test)]

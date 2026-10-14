@@ -36,7 +36,11 @@ impl TransferTensor {
                 }
             }
         }
-        Self { n_moments, n_powers, d }
+        Self {
+            n_moments,
+            n_powers,
+            d,
+        }
     }
 
     /// Number of Legendre moments, L + 1
@@ -102,7 +106,10 @@ mod tests {
         let (mut e, mut m) = (vec![0.0; 3], vec![0.0; 4]);
         let tau = 0.7;
         t.matrix(tau, &mut e, &mut m);
-        assert_eq!(m, vec![expn(1, tau), expn(2, tau), expn(2, tau), expn(3, tau)]);
+        assert_eq!(
+            m,
+            vec![expn(1, tau), expn(2, tau), expn(2, tau), expn(3, tau)]
+        );
     }
 
     #[test]
@@ -136,7 +143,10 @@ mod tests {
                     };
                     let q = gl.integrate(f);
                     let got = m[l * n + lp];
-                    assert!((got - q).abs() < 1e-10 * (1.0 + q.abs()), "l={l} l'={lp} τ={tau}: {got} vs {q}");
+                    assert!(
+                        (got - q).abs() < 1e-10 * (1.0 + q.abs()),
+                        "l={l} l'={lp} τ={tau}: {got} vs {q}"
+                    );
                 }
             }
         }

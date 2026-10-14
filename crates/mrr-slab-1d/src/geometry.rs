@@ -81,14 +81,24 @@ impl Tracer for Slab1D {
     /// to be inside the slab (true for anything produced by `map_uniform`);
     /// anything outside is clipped away.
     fn trace(&self, from: &f64, to: &f64, out: &mut Vec<Segment>) {
-        debug_assert!(self.material_at(from).is_some(), "trace start {from} outside slab");
-        debug_assert!(self.material_at(to).is_some(), "trace end {to} outside slab");
+        debug_assert!(
+            self.material_at(from).is_some(),
+            "trace start {from} outside slab"
+        );
+        debug_assert!(
+            self.material_at(to).is_some(),
+            "trace end {to} outside slab"
+        );
 
         out.clear();
-        out.extend(self.regions.overlaps(*from, *to).map(|(i, length)| Segment {
-            material: self.materials[i],
-            length,
-        }));
+        out.extend(
+            self.regions
+                .overlaps(*from, *to)
+                .map(|(i, length)| Segment {
+                    material: self.materials[i],
+                    length,
+                }),
+        );
         // `overlaps` is ascending in x; travelling left means reverse order
         if to < from {
             out.reverse();
@@ -119,7 +129,10 @@ mod tests {
     fn rejects_wrong_material_count() {
         assert!(matches!(
             Slab1D::new(vec![0.0, 1.0, 2.0], vec![FUEL]),
-            Err(SlabError::MaterialCount { expected: 2, got: 1 })
+            Err(SlabError::MaterialCount {
+                expected: 2,
+                got: 1
+            })
         ));
     }
 
@@ -175,12 +188,18 @@ mod tests {
 
     #[test]
     fn trace_crossing_regions_left_to_right() {
-        assert_eq!(trace(&pin(), 0.5, 3.25), vec![(1, 0.5), (0, 2.0), (1, 0.25)]);
+        assert_eq!(
+            trace(&pin(), 0.5, 3.25),
+            vec![(1, 0.5), (0, 2.0), (1, 0.25)]
+        );
     }
 
     #[test]
     fn trace_right_to_left_is_in_travel_order() {
-        assert_eq!(trace(&pin(), 3.25, 0.5), vec![(1, 0.25), (0, 2.0), (1, 0.5)]);
+        assert_eq!(
+            trace(&pin(), 3.25, 0.5),
+            vec![(1, 0.25), (0, 2.0), (1, 0.5)]
+        );
     }
 
     #[test]
@@ -192,7 +211,10 @@ mod tests {
     #[test]
     fn trace_of_coincident_points_is_empty_and_clears_buffer() {
         let s = pin();
-        let mut out = vec![Segment { material: FUEL, length: 9.0 }];
+        let mut out = vec![Segment {
+            material: FUEL,
+            length: 9.0,
+        }];
         s.trace(&1.0, &1.0, &mut out);
         assert!(out.is_empty());
     }

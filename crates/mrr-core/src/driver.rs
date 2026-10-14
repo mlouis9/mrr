@@ -17,6 +17,19 @@ pub struct RunResult {
     pub cycles: usize,
 }
 
+/// The state of the empirical source after a cycle, handed to the
+/// `on_cycle` callback of [`power_iterate_with`].
+///
+/// `cycle` counts completed cycles: 0 is the initial source (where `k` is
+/// `None`), 1 is the source after the first gather/emission, and so on.
+/// The atoms are borrowed, so a callback that wants to keep them must copy
+/// what it needs (e.g. write them to a file).
+pub struct CycleSnapshot<'a, P> {
+    pub cycle: usize,
+    pub k: Option<f64>,
+    pub atoms: &'a Atoms<P>,
+}
+
 /// Parameters influencing simulation
 pub struct RunConfig {
     pub rules: Vec<Box<dyn StoppingRule>>,
@@ -146,6 +159,17 @@ pub fn power_iterate<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal<G>>(
     problem: &Problem<G, K, E, P>,
     cfg: &RunConfig,
 ) -> RunResult {
+    power_iterate_with(problem, cfg, |_| {})
+}
+
+/// Power iteration that calls `on_cycle` with the initial source and with
+/// the source after every cycle. Core does no I/O itself: tallies, logging
+/// and snapshot files all live in the callback.
+pub fn power_iterate_with<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal<G>>(
+    problem: &Problem<G, K, E, P>,
+    cfg: &RunConfig,
+    mut on_cycle: impl FnMut(&CycleSnapshot<G::Point>),
+) -> RunResult {
     // Initialize loop parameters
     let mut cycle: usize = 0;
     let mut k: f64 = 0.0;
@@ -153,6 +177,11 @@ pub fn power_iterate<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal<G>>(
 
     // Initialize empirical source (once, before iterating)
     let mut atoms = problem.init_src(cfg);
+    on_cycle(&CycleSnapshot {
+        cycle,
+        k: None,
+        atoms: &atoms,
+    });
 
     // Power iteration
     loop {
@@ -171,6 +200,11 @@ pub fn power_iterate<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal<G>>(
         (k_prev, k) = (k, problem.emit_and_normalize(&mut targets));
         atoms = targets;
         cycle += 1;
+        on_cycle(&CycleSnapshot {
+            cycle,
+            k: Some(k),
+            atoms: &atoms,
+        });
     }
     RunResult { k, cycles: cycle }
 }
@@ -220,6 +254,36 @@ mod tests {
     fn k_follows_scatter_fission_split() {
         let (result, _) = run(0.5, 0.6, 2);
         assert_close(result.k, 0.6 / (1.0 - 0.5));
+    }
+
+    #[test]
+    fn callback_sees_initial_source_and_every_cycle() {
+        let geometry = TestSlab::new(1.0, 0.0..1.0);
+        let layout = MomentLayout::from_legendre_order(0, 1);
+        let problem = Problem::new(
+            geometry,
+            layout,
+            ConstGather::new(layout.isotropic_white_block()),
+            ScaledEmission::new(0.5, 0.6),
+            UniformProposal,
+        );
+        let cfg = RunConfig {
+            rules: vec![Box::new(MaxCycles::new(3))],
+            n_source_atoms: 10,
+            seed: 1,
+        };
+        let mut seen = Vec::new();
+        let result = power_iterate_with(&problem, &cfg, |snap| {
+            seen.push((snap.cycle, snap.k, snap.atoms.len()));
+        });
+        assert_eq!(seen.len(), 4);
+        assert_eq!(seen[0], (0, None, 10));
+        for (i, &(cycle, k, n)) in seen.iter().enumerate().skip(1) {
+            assert_eq!(cycle, i);
+            assert_close(k.unwrap(), 1.2);
+            assert_eq!(n, 10);
+        }
+        assert_eq!(seen.last().unwrap().1, Some(result.k));
     }
 
     #[test]
