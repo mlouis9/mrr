@@ -1,0 +1,6 @@
+[package]
+name = "mrr-csg"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]

@@ -8,4 +8,5 @@ rand = "0.10.3"
 rand_xoshiro = "0.8.1"
 
 [dev-dependencies]
+mrr-math = { path = "../mrr-math" }
 approx.workspace = true

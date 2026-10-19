@@ -134,21 +134,23 @@ mod tests {
     use super::benchmarks::*;
     use super::*;
     use mrr_core::Geometry;
+    use mrr_math::testing::{Tol, assert_close, assert_close_tol};
 
     #[test]
     fn pua_data_is_consistent() {
         // Σ_t = Σ_s + Σ_c + Σ_f, and k_inf = νΣ_f / Σ_a
         let sum = pua::SIGMA_S + pua::SIGMA_C + pua::SIGMA_F;
-        assert!((sum - pua::SIGMA_T).abs() < 1e-12);
+        assert_close(sum, pua::SIGMA_T);
         let k_inf = pua::NU * pua::SIGMA_F / (pua::SIGMA_C + pua::SIGMA_F);
-        assert!((k_inf - pua::K_INF).abs() < 1e-6);
+        // K_INF is quoted to 7 significant figures in the benchmark report
+        assert_close_tol(k_inf, pua::K_INF, Tol::new(1e-6, 0.0));
     }
 
     #[test]
     fn pua_slab_is_built() {
         let p = pua_1_0_sl();
         assert_eq!(p.slab().n_regions(), 1);
-        assert!((p.slab().volume() - 3.707444).abs() < 1e-12);
+        assert_close(p.slab().volume(), 3.707444);
         assert_eq!(p.library().n_groups(), 1);
         assert_eq!(p.library().max_order(), 0);
     }

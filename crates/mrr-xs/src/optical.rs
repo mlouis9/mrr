@@ -34,6 +34,7 @@ mod tests {
     use crate::energy::EnergyGroups;
     use crate::material::test_data;
     use mrr_core::MaterialId;
+    use mrr_math::testing::assert_all_close;
 
     /// Two 2-group materials with different sigma_t in every group:
     /// fuel: [0.5, 1.2], water: [0.3, 2.0]
@@ -54,18 +55,11 @@ mod tests {
         }
     }
 
-    fn close(a: &[f64], b: &[f64]) -> bool {
-        a.len() == b.len()
-            && a.iter()
-                .zip(b)
-                .all(|(x, y)| (x - y).abs() <= 1e-14 + 1e-12 * y.abs())
-    }
-
     #[test]
     fn single_segment_is_sigma_t_times_length() {
         let mut out = [0.0; 2];
         optical_depths(&library(), &[seg(0, 2.0)], &mut out);
-        assert!(close(&out, &[1.0, 2.4]));
+        assert_all_close(&out, &[1.0, 2.4]);
     }
 
     #[test]
@@ -73,7 +67,7 @@ mod tests {
         // fuel 2.0 then water 0.5: [0.5*2 + 0.3*0.5, 1.2*2 + 2.0*0.5]
         let mut out = [0.0; 2];
         optical_depths(&library(), &[seg(0, 2.0), seg(1, 0.5)], &mut out);
-        assert!(close(&out, &[1.15, 3.4]));
+        assert_all_close(&out, &[1.15, 3.4]);
     }
 
     #[test]
@@ -82,7 +76,7 @@ mod tests {
         let (mut a, mut b) = ([0.0; 2], [0.0; 2]);
         optical_depths(&lib, &[seg(0, 0.7), seg(1, 1.3), seg(0, 0.2)], &mut a);
         optical_depths(&lib, &[seg(1, 1.3), seg(0, 0.9)], &mut b);
-        assert!(close(&a, &b));
+        assert_all_close(&a, &b);
     }
 
     #[test]
@@ -98,7 +92,7 @@ mod tests {
         let mut out = [0.0; 2];
         optical_depths(&lib, &[seg(1, 1.0)], &mut out);
         optical_depths(&lib, &[seg(1, 1.0)], &mut out);
-        assert!(close(&out, &[0.3, 2.0]));
+        assert_all_close(&out, &[0.3, 2.0]);
     }
 
     #[test]

@@ -74,9 +74,7 @@ mod tests {
     use super::*;
     use mrr_xs::{EnergyGroups, MgMaterialData};
 
-    fn close(a: f64, b: f64) -> bool {
-        (a - b).abs() <= 1e-14 * (1.0 + b.abs())
-    }
+    use mrr_math::testing::*;
 
     /// 2 groups, L = 1. "fuel" in [0,1), "water" in [1,2].
     fn setup() -> (MaterialLibrary, Slab1D) {
@@ -115,7 +113,7 @@ mod tests {
         // ℓ=1: g0 = 0.05·0.4 + 0·(-0.6) = 0.02 ; g1 = -0.01·0.4 + 0.02·(-0.6) = -0.016
         let want = [0.6, 0.02, 2.9, -0.016];
         for (got, want) in e.scattering.iter().zip(want) {
-            assert!(close(*got, want), "{got} vs {want}");
+            assert!(is_close(*got, want, Tol::EXACT), "{got} vs {want}");
         }
     }
 
@@ -124,7 +122,7 @@ mod tests {
         let (lib, slab) = setup();
         let e = SlabEmission::new(&lib).compute_emission(&slab, 0.5, &PHI);
         let production = 0.01 * 2.0 + 0.2 * 3.0;
-        assert!(close(e.fission[0], production)); // ℓ=0, g=0: χ0 = 1
+        assert_close(e.fission[0], production); // ℓ=0, g=0: χ0 = 1
         assert_eq!(e.fission[1], 0.0); // ℓ=1
         assert_eq!(e.fission[2], 0.0); // χ1 = 0
         assert_eq!(e.fission[3], 0.0);
@@ -136,7 +134,7 @@ mod tests {
         let em = SlabEmission::new(&lib);
         let water = em.compute_emission(&slab, 1.5, &PHI);
         assert!(water.fission.iter().all(|&f| f == 0.0));
-        assert!(close(water.scattering[0], 0.2 * 2.0));
+        assert_close(water.scattering[0], 0.2 * 2.0);
         // Interface belongs to the region on its right, right face is inside
         assert_eq!(
             em.compute_emission(&slab, 1.0, &PHI).scattering,
@@ -156,8 +154,8 @@ mod tests {
         let doubled: Vec<f64> = PHI.iter().map(|p| 2.0 * p).collect();
         let b = em.compute_emission(&slab, 0.5, &doubled);
         for k in 0..4 {
-            assert!(close(b.scattering[k], 2.0 * a.scattering[k]));
-            assert!(close(b.fission[k], 2.0 * a.fission[k]));
+            assert_close(b.scattering[k], 2.0 * a.scattering[k]);
+            assert_close(b.fission[k], 2.0 * a.fission[k]);
         }
     }
 

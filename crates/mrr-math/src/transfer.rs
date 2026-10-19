@@ -88,6 +88,7 @@ mod tests {
     use crate::expint::expn;
     use crate::legendre::legendre;
     use crate::quadrature::GaussLegendre;
+    use crate::testing::*;
 
     #[test]
     fn d_for_order_one() {
@@ -144,7 +145,7 @@ mod tests {
                     let q = gl.integrate(f);
                     let got = m[l * n + lp];
                     assert!(
-                        (got - q).abs() < 1e-10 * (1.0 + q.abs()),
+                        is_close(got, q, Tol::NUMERICAL),
                         "l={l} l'={lp} τ={tau}: {got} vs {q}"
                     );
                 }

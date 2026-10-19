@@ -57,17 +57,15 @@ mod tests {
     use super::*;
     use crate::legendre::legendre;
 
-    fn close(a: f64, b: f64) -> bool {
-        (a - b).abs() <= 1e-13 + 1e-12 * b.abs()
-    }
+    use crate::testing::*;
 
     #[test]
     fn weights_sum_to_two_and_nodes_are_symmetric() {
         for n in 1..=16 {
             let q = GaussLegendre::new(n);
-            assert!(close(q.weights.iter().sum(), 2.0));
+            assert_close(q.weights.iter().sum(), 2.0);
             for i in 0..n {
-                assert!(close(q.nodes[i], -q.nodes[n - 1 - i]));
+                assert_close(q.nodes[i], -q.nodes[n - 1 - i]);
             }
             assert!(q.nodes.windows(2).all(|w| w[0] < w[1]));
         }
@@ -84,7 +82,7 @@ mod tests {
                     2.0 / (k as f64 + 1.0)
                 };
                 assert!(
-                    close(q.integrate(|x| x.powi(k as i32)), exact),
+                    is_close(q.integrate(|x| x.powi(k as i32)), exact, Tol::EXACT),
                     "n={n}, k={k}"
                 );
             }
@@ -94,8 +92,8 @@ mod tests {
     #[test]
     fn known_two_point_rule() {
         let q = GaussLegendre::new(2);
-        assert!(close(q.nodes[1], 1.0 / 3.0_f64.sqrt()));
-        assert!(close(q.weights[0], 1.0));
+        assert_close(q.nodes[1], 1.0 / 3.0_f64.sqrt());
+        assert_close(q.weights[0], 1.0);
     }
 
     #[test]
@@ -109,7 +107,7 @@ mod tests {
                 } else {
                     0.0
                 };
-                assert!(close(integral, expected), "l={l}, m={m}");
+                assert!(is_close(integral, expected, Tol::EXACT), "l={l}, m={m}");
             }
         }
     }

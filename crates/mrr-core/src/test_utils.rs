@@ -1,8 +1,9 @@
 use crate::traits::{Emission, Emitted, Gather, Geometry};
 use std::ops::Range;
 
-pub(crate) const RTOL: f64 = 1e-12;
-pub(crate) const ATOL: f64 = 1e-14;
+// Closeness assertions and tolerances are shared across the workspace
+// (see `mrr_math::testing` for the rule and the presets).
+pub(crate) use mrr_math::testing::*;
 
 /// Minimal 1D geometry on [0, width) that accepts every sample
 pub(crate) struct TestSlab {
@@ -74,74 +75,5 @@ impl<G: Geometry> Emission<G> for ScaledEmission {
             scattering: flux_moments.iter().map(|m| self.scatter * m).collect(),
             fission: flux_moments.iter().map(|m| self.fission * m).collect(),
         }
-    }
-}
-
-// Closeness assertions used throughout the tests.
-//
-// Two values are "close" when |a - b| <= atol + rtol * |b| (the rule numpy's
-// `isclose` uses): `rtol` covers values of ordinary size, `atol` covers values
-// near zero, where any relative test would fail on round-off alone.
-// `#[track_caller]` makes a failure report the line in the *test* that called
-// the helper, not a line inside the helper.
-
-/// Assert `a` is close to the expected value `b` with the default tolerances
-#[track_caller]
-pub(crate) fn assert_close(a: f64, b: f64) {
-    assert_close_tol(a, b, RTOL, ATOL);
-}
-
-/// For the few cases that need a looser tolerance like statistical checks
-#[track_caller]
-pub(crate) fn assert_close_tol(a: f64, b: f64, rtol: f64, atol: f64) {
-    let diff = (a - b).abs();
-    let tol = atol + rtol * b.abs();
-    assert!(
-        diff <= tol,
-        "not close: actual {a:e}, expected {b:e} (|diff| = {diff:e} > tol = {tol:e})"
-    );
-}
-
-/// Vector version: same length, and every entry close to its expected value
-#[track_caller]
-pub(crate) fn assert_all_close(actual: &[f64], expected: &[f64]) {
-    assert_eq!(actual.len(), expected.len(), "length mismatch");
-    for (i, (&a, &b)) in actual.iter().zip(expected).enumerate() {
-        let diff = (a - b).abs();
-        let tol = ATOL + RTOL * b.abs();
-        assert!(
-            diff <= tol,
-            "not close at index {i}: actual {a:e}, expected {b:e} (|diff| = {diff:e} > tol = {tol:e})"
-        );
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn close_values_pass() {
-        assert_close(1.0, 1.0 + 1e-13);
-        assert_close(0.0, 1e-15); // near zero: absolute tolerance applies
-        assert_all_close(&[1.0, 0.0], &[1.0 + 1e-13, 1e-15]);
-    }
-
-    #[test]
-    #[should_panic(expected = "not close")]
-    fn far_values_fail() {
-        assert_close(1.0, 1.0 + 1e-6);
-    }
-
-    #[test]
-    #[should_panic(expected = "not close at index 1")]
-    fn slice_reports_failing_index() {
-        assert_all_close(&[1.0, 2.0], &[1.0, 3.0]);
-    }
-
-    #[test]
-    #[should_panic(expected = "length mismatch")]
-    fn slice_length_mismatch_fails() {
-        assert_all_close(&[1.0], &[1.0, 2.0]);
     }
 }

@@ -7,9 +7,12 @@ pub mod bins;
 pub mod expint;
 pub mod group_matrix;
 pub mod legendre;
+pub mod partition;
 pub mod quadrature;
+pub mod testing;
 pub mod transfer;
 
 pub use bins::Bins;
 pub use group_matrix::GroupMatrix;
+pub use partition::{Partition, Span};
 pub use transfer::TransferTensor;

@@ -120,9 +120,7 @@ mod tests {
     use mrr_math::quadrature::GaussLegendre;
     use mrr_xs::{EnergyGroups, MgMaterialData};
 
-    fn close(a: f64, b: f64) -> bool {
-        (a - b).abs() <= 1e-12 * (1.0 + b.abs())
-    }
+    use mrr_math::testing::*;
 
     /// Pure absorber(s) with the given Σ_t per group, scattering order L
     fn library(max_order: usize, sigma_t: &[&[f64]]) -> MaterialLibrary {
@@ -156,8 +154,8 @@ mod tests {
         let atoms = one_atom(gather.layout(), 1.0, 0.5, &[2.0, 0.0]);
         let tau = 0.8 * 1.5;
         let right = gather.gather(&slab, &atoms, 2.5);
-        assert!(close(right[0], 0.5 * 0.5 * 2.0 * expn(1, tau)));
-        assert!(close(right[1], 0.5 * 0.5 * 2.0 * expn(2, tau)));
+        assert_close(right[0], 0.5 * 0.5 * 2.0 * expn(1, tau));
+        assert_close(right[1], 0.5 * 0.5 * 2.0 * expn(2, tau));
         // Same distance on the left (atom at 1.0, target at 2.5 vs atom at
         // 2.5, target at 1.0): φ0 unchanged, φ1 flips sign
         let left = gather.gather(
@@ -165,8 +163,8 @@ mod tests {
             &one_atom(gather.layout(), 2.5, 0.5, &[2.0, 0.0]),
             1.0,
         );
-        assert!(close(left[0], right[0]));
-        assert!(close(left[1], -right[1]));
+        assert_close(left[0], right[0]);
+        assert_close(left[1], -right[1]);
     }
 
     #[test]
@@ -180,7 +178,7 @@ mod tests {
         let b = gather.gather(&slab, &one_atom(gather.layout(), 3.0, 1.0, &q_mirror), 1.8);
         for l in 0..4 {
             let sign = if l % 2 == 0 { 1.0 } else { -1.0 };
-            assert!(close(b[l], sign * a[l]), "l={l}");
+            assert!(is_close(b[l], sign * a[l], Tol::EXACT), "l={l}");
         }
     }
 
@@ -195,8 +193,8 @@ mod tests {
         let tau = 1.3 * 1.1;
         let phi = gather.gather(&slab, &atoms, 0.4); // s = -1
         let (e1, e2, e3) = (expn(1, tau), expn(2, tau), expn(3, tau));
-        assert!(close(phi[0], w * (0.5 * q0 * e1 - 1.5 * q1 * e2)));
-        assert!(close(phi[1], w * (-0.5 * q0 * e2 + 1.5 * q1 * e3)));
+        assert_close(phi[0], w * (0.5 * q0 * e1 - 1.5 * q1 * e2));
+        assert_close(phi[1], w * (-0.5 * q0 * e2 + 1.5 * q1 * e3));
     }
 
     #[test]
@@ -224,7 +222,10 @@ mod tests {
                     0.5 * legendre(l, mu) * qmu * (-tau / m).exp() / m
                 };
                 let want = w * gl.integrate(f);
-                assert!((got - want).abs() < 1e-10, "z={z} l={l}: {got} vs {want}");
+                assert!(
+                    is_close(got, want, Tol::NUMERICAL),
+                    "z={z} l={l}: {got} vs {want}"
+                );
             }
         }
     }
@@ -240,7 +241,7 @@ mod tests {
         let a = gather.gather(&het, &one_atom(gather.layout(), 0.5, 1.0, &q), 2.0);
         let b = gather.gather(&hom, &one_atom(gather.layout(), 0.5, 1.0, &q), 2.0);
         for l in 0..3 {
-            assert!(close(a[l], b[l]));
+            assert_close(a[l], b[l]);
         }
     }
 
@@ -256,8 +257,8 @@ mod tests {
         let phi = gather.gather(&slab, &one_atom(layout, 1.0, 1.0, &q), 2.0);
         assert_eq!(phi[layout.index(0, 0)], 0.0);
         assert_eq!(phi[layout.index(1, 0)], 0.0);
-        assert!(close(phi[layout.index(0, 1)], 0.5 * expn(1, 2.0)));
-        assert!(close(phi[layout.index(1, 1)], 0.5 * expn(2, 2.0)));
+        assert_close(phi[layout.index(0, 1)], 0.5 * expn(1, 2.0));
+        assert_close(phi[layout.index(1, 1)], 0.5 * expn(2, 2.0));
     }
 
     #[test]
@@ -273,7 +274,7 @@ mod tests {
         let b = gather.gather(&slab, &one_atom(layout, 3.0, 1.5, &[2.0, -0.1]), 2.2);
         let ab = gather.gather(&slab, &both, 2.2);
         for l in 0..2 {
-            assert!(close(ab[l], a[l] + b[l]));
+            assert_close(ab[l], a[l] + b[l]);
         }
     }
 
@@ -298,6 +299,6 @@ mod tests {
             1.5,
         );
         assert!(phi[0].is_infinite() && phi[0] > 0.0);
-        assert!(close(phi[1], 0.5));
+        assert_close(phi[1], 0.5);
     }
 }

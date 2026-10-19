@@ -1,0 +1,12 @@
+[package]
+name = "mrr-geom3d"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+glam = "0.34.1"
+mrr-core = { version = "0.1.0", path = "../mrr-core" }
+mrr-math = { path = "../mrr-math" }
+
+[dev-dependencies]
+proptest = "1.12.0"

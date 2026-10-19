@@ -110,6 +110,7 @@ impl Tracer for Slab1D {
 mod tests {
     use super::*;
     use mrr_math::bins::BinsError;
+    use mrr_math::testing::*;
 
     const FUEL: MaterialId = MaterialId(0);
     const WATER: MaterialId = MaterialId(1);
@@ -228,7 +229,7 @@ mod tests {
                 let (a, b) = (0.1 * i as f64, 0.1 * j as f64);
                 s.trace(&a, &b, &mut out);
                 let total: f64 = out.iter().map(|seg| seg.length).sum();
-                assert!((total - (b - a).abs()).abs() < 1e-12, "{a} -> {b}");
+                assert!(is_close(total, (b - a).abs(), Tol::EXACT), "{a} -> {b}");
             }
         }
     }
@@ -253,7 +254,7 @@ mod tests {
         s.trace(&0.5, &2.0, &mut segs); // 0.5 water + 1.0 fuel
         let mut tau = [0.0; 2];
         optical_depths(&lib, &segs, &mut tau);
-        assert!((tau[0] - (0.5 * 0.3 + 1.0 * 0.5)).abs() < 1e-14);
-        assert!((tau[1] - (0.5 * 2.0 + 1.0 * 1.2)).abs() < 1e-14);
+        assert_close(tau[0], 0.5 * 0.3 + 1.0 * 0.5);
+        assert_close(tau[1], 0.5 * 2.0 + 1.0 * 1.2);
     }
 }

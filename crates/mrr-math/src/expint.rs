@@ -97,9 +97,7 @@ fn series(n: u32, x: f64) -> f64 {
 mod tests {
     use super::*;
 
-    fn close(a: f64, b: f64, rtol: f64) -> bool {
-        (a - b).abs() <= rtol * b.abs()
-    }
+    use crate::testing::*;
 
     #[test]
     fn matches_tabulated_values() {
@@ -116,7 +114,7 @@ mod tests {
         ];
         for (n, x, expected) in cases {
             assert!(
-                close(expn(n, x), expected, 1e-12),
+                is_close(expn(n, x), expected, Tol::EXACT),
                 "E_{n}({x}) = {}",
                 expn(n, x)
             );
@@ -130,10 +128,8 @@ mod tests {
             for n in 1..8 {
                 let lhs = n as f64 * expn(n + 1, x);
                 let rhs = (-x).exp() - x * expn(n, x);
-                assert!(
-                    (lhs - rhs).abs() <= 1e-13 + 1e-11 * rhs.abs(),
-                    "n={n}, x={x}"
-                );
+                // The subtraction e^{-x} - x E_n cancels for small x
+                assert!(is_close(lhs, rhs, Tol::NUMERICAL), "n={n}, x={x}");
             }
         }
     }
@@ -141,9 +137,9 @@ mod tests {
     #[test]
     fn special_cases() {
         assert_eq!(expn(1, 0.0), f64::INFINITY);
-        assert!(close(expn(2, 0.0), 1.0, 1e-15));
-        assert!(close(expn(3, 0.0), 0.5, 1e-15));
-        assert!(close(expn(0, 2.0), (-2.0f64).exp() / 2.0, 1e-15));
+        assert_close(expn(2, 0.0), 1.0);
+        assert_close(expn(3, 0.0), 0.5);
+        assert_close(expn(0, 2.0), (-2.0f64).exp() / 2.0);
     }
 
     #[test]
@@ -151,7 +147,10 @@ mod tests {
         for n in 1..6 {
             let below = expn(n, 1.0 - 1e-9);
             let above = expn(n, 1.0 + 1e-9);
-            assert!(close(below, above, 1e-7), "n={n}");
+            // The two sides are 2e-9 apart in x and |E_n'/E_n| = E_{n-1}/E_n
+            // is O(1) at x = 1, so they may differ by a few 1e-9 relative;
+            // a jump from switching methods would be much larger.
+            assert!(is_close(below, above, Tol::new(1e-8, 0.0)), "n={n}");
         }
     }
 
@@ -182,7 +181,7 @@ mod tests {
                 for n in 1..e.len() {
                     if x < n as f64 {
                         let r = ((-x).exp() - x * e[n - 1]) / n as f64;
-                        assert!((r - e[n]).abs() <= 1e-13 * e[n].abs() + 1e-300);
+                        assert!(is_close(r, e[n], Tol::EXACT), "n={n}, x={x}");
                     }
                 }
             }

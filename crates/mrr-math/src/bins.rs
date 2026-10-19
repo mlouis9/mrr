@@ -165,6 +165,7 @@ impl Bins {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::*;
 
     fn bins() -> Bins {
         // Three uneven bins: [0, 1), [1, 1.5), [1.5, 4)
@@ -326,7 +327,7 @@ mod tests {
             for j in 0..=20 {
                 let (x0, x1) = (0.2 * i as f64, 0.2 * j as f64);
                 let total: f64 = b.overlaps(x0, x1).map(|(_, l)| l).sum();
-                assert!((total - (x1 - x0).abs()).abs() < 1e-12, "{x0} {x1}");
+                assert!(is_close(total, (x1 - x0).abs(), Tol::EXACT), "{x0} {x1}");
             }
         }
     }

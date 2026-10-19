@@ -210,6 +210,7 @@ pub(crate) fn test_data(name: &str) -> MgMaterialData {
 mod tests {
     use super::*;
     use mrr_math::group_matrix::GroupMatrixError;
+    use mrr_math::testing::{Tol, assert_close, is_close};
 
     fn build(data: MgMaterialData) -> Result<MgMaterial, XsError> {
         MgMaterial::from_data(data, 2, 1)
@@ -233,7 +234,7 @@ mod tests {
         assert_eq!(m.scatter(0).get(0, 1), 0.1); // downscatter fast -> thermal
         assert_eq!(m.scatter(0).get(1, 0), 0.0); // no upscatter
         assert_eq!(m.scatter(1).get(0, 1), -0.01);
-        assert!((m.scatter_out(0) - 0.4).abs() < 1e-15);
+        assert_close(m.scatter_out(0), 0.4);
     }
 
     #[test]
@@ -370,7 +371,7 @@ mod tests {
         d.chi = vec![0.9, 0.0];
         assert!(matches!(
             build(d),
-            Err(XsError::ChiNotNormalized { sum, .. }) if (sum - 0.9).abs() < 1e-15
+            Err(XsError::ChiNotNormalized { sum, .. }) if is_close(sum, 0.9, Tol::EXACT)
         ));
     }
 

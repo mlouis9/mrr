@@ -66,26 +66,24 @@ pub fn legendre_monomials(max_order: usize) -> Vec<Vec<f64>> {
 mod tests {
     use super::*;
 
-    fn close(a: f64, b: f64) -> bool {
-        (a - b).abs() <= 1e-13 + 1e-12 * b.abs()
-    }
+    use crate::testing::*;
 
     #[test]
     fn low_orders_match_closed_forms() {
         for &mu in &[-1.0, -0.3, 0.0, 0.42, 1.0] {
-            assert!(close(legendre(0, mu), 1.0));
-            assert!(close(legendre(1, mu), mu));
-            assert!(close(legendre(2, mu), 0.5 * (3.0 * mu * mu - 1.0)));
-            assert!(close(legendre(3, mu), 0.5 * (5.0 * mu.powi(3) - 3.0 * mu)));
+            assert_close(legendre(0, mu), 1.0);
+            assert_close(legendre(1, mu), mu);
+            assert_close(legendre(2, mu), 0.5 * (3.0 * mu * mu - 1.0));
+            assert_close(legendre(3, mu), 0.5 * (5.0 * mu.powi(3) - 3.0 * mu));
         }
     }
 
     #[test]
     fn value_at_one_and_parity() {
         for l in 0..20 {
-            assert!(close(legendre(l, 1.0), 1.0));
+            assert_close(legendre(l, 1.0), 1.0);
             let sign = if l % 2 == 0 { 1.0 } else { -1.0 };
-            assert!(close(legendre(l, -0.37), sign * legendre(l, 0.37)));
+            assert_close(legendre(l, -0.37), sign * legendre(l, 0.37));
         }
     }
 
@@ -94,7 +92,7 @@ mod tests {
         let mut out = [0.0; 12];
         legendre_all(0.61, &mut out);
         for (l, &p) in out.iter().enumerate() {
-            assert!(close(p, legendre(l, 0.61)));
+            assert_close(p, legendre(l, 0.61));
         }
     }
 
@@ -123,7 +121,7 @@ mod tests {
             assert_eq!(coeffs.len(), l + 1);
             for &m in &[0.0, 0.1, 0.5, 0.77, 1.0] {
                 let p: f64 = coeffs.iter().rev().fold(0.0, |acc, &c| acc * m + c);
-                assert!(close(p, legendre(l, m)), "l={l} m={m}");
+                assert!(is_close(p, legendre(l, m), Tol::EXACT), "l={l} m={m}");
             }
         }
     }
