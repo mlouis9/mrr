@@ -15,7 +15,7 @@
 //! targets where it matters has measure zero and skipping it changes no
 //! expectation. It only happens with deterministic (grid) samplers.
 
-use mrr_core::traits::{Gather, Tracer};
+use mrr_core::traits::Gather;
 use mrr_core::{Atoms, MomentLayout, Segment};
 use mrr_math::TransferTensor;
 use mrr_xs::{MaterialLibrary, optical_depths};
@@ -83,7 +83,7 @@ impl Gather<Slab1D> for ExactGather<'_> {
                 continue; // see module docs
             }
             let right = target > z_i; // s_i = +1
-            geometry.trace(&z_i, &target, &mut s.segments);
+            geometry.trace(z_i, target, &mut s.segments);
             optical_depths(self.lib, &s.segments, &mut s.tau);
             let q = src_atoms.atom_moments(i);
 

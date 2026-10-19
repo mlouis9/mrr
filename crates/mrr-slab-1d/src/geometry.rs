@@ -4,7 +4,7 @@
 //! each hold one material. All edge handling (which region owns an interface,
 //! the right face, zero-length pieces) is delegated to `Bins`.
 use crate::SlabError;
-use mrr_core::traits::{Geometry, Tracer};
+use mrr_core::traits::Geometry;
 use mrr_core::{MaterialId, Segment};
 use mrr_math::Bins;
 
@@ -70,17 +70,19 @@ impl Geometry for Slab1D {
     }
 }
 
-impl Tracer for Slab1D {
+/// Tracing. Inherent methods rather than a trait: only the slab physics
+/// (gather, emission) uses them, and the 3D counterpart is `mrr_geom3d::Walker`.
+impl Slab1D {
     /// `None` outside [lower, upper] or for NaN. Interfaces belong to the
     /// region on their right; the right face belongs to the last region.
-    fn material_at(&self, p: &f64) -> Option<MaterialId> {
-        self.regions.locate_closed(*p).map(|i| self.materials[i])
+    pub fn material_at(&self, p: f64) -> Option<MaterialId> {
+        self.regions.locate_closed(p).map(|i| self.materials[i])
     }
 
     /// Segments from `from` to `to`, in travel order. Both points are expected
     /// to be inside the slab (true for anything produced by `map_uniform`);
     /// anything outside is clipped away.
-    fn trace(&self, from: &f64, to: &f64, out: &mut Vec<Segment>) {
+    pub fn trace(&self, from: f64, to: f64, out: &mut Vec<Segment>) {
         debug_assert!(
             self.material_at(from).is_some(),
             "trace start {from} outside slab"
@@ -91,14 +93,10 @@ impl Tracer for Slab1D {
         );
 
         out.clear();
-        out.extend(
-            self.regions
-                .overlaps(*from, *to)
-                .map(|(i, length)| Segment {
-                    material: self.materials[i],
-                    length,
-                }),
-        );
+        out.extend(self.regions.overlaps(from, to).map(|(i, length)| Segment {
+            material: self.materials[i],
+            length,
+        }));
         // `overlaps` is ascending in x; travelling left means reverse order
         if to < from {
             out.reverse();
@@ -122,7 +120,7 @@ mod tests {
 
     fn trace(slab: &Slab1D, a: f64, b: f64) -> Vec<(usize, f64)> {
         let mut out = Vec::new();
-        slab.trace(&a, &b, &mut out);
+        slab.trace(a, b, &mut out);
         out.iter().map(|s| (s.material.0, s.length)).collect()
     }
 
@@ -166,19 +164,19 @@ mod tests {
     #[test]
     fn material_at_inside_edges_and_faces() {
         let s = pin();
-        assert_eq!(s.material_at(&0.5), Some(WATER));
-        assert_eq!(s.material_at(&2.0), Some(FUEL));
-        assert_eq!(s.material_at(&0.0), Some(WATER)); // left face
-        assert_eq!(s.material_at(&1.0), Some(FUEL)); // interface -> right region
-        assert_eq!(s.material_at(&3.5), Some(WATER)); // right face is inside
+        assert_eq!(s.material_at(0.5), Some(WATER));
+        assert_eq!(s.material_at(2.0), Some(FUEL));
+        assert_eq!(s.material_at(0.0), Some(WATER)); // left face
+        assert_eq!(s.material_at(1.0), Some(FUEL)); // interface -> right region
+        assert_eq!(s.material_at(3.5), Some(WATER)); // right face is inside
     }
 
     #[test]
     fn material_at_outside_or_nan_is_none() {
         let s = pin();
-        assert_eq!(s.material_at(&-0.1), None);
-        assert_eq!(s.material_at(&3.6), None);
-        assert_eq!(s.material_at(&f64::NAN), None);
+        assert_eq!(s.material_at(-0.1), None);
+        assert_eq!(s.material_at(3.6), None);
+        assert_eq!(s.material_at(f64::NAN), None);
     }
 
     #[test]
@@ -216,7 +214,7 @@ mod tests {
             material: FUEL,
             length: 9.0,
         }];
-        s.trace(&1.0, &1.0, &mut out);
+        s.trace(1.0, 1.0, &mut out);
         assert!(out.is_empty());
     }
 
@@ -227,7 +225,7 @@ mod tests {
         for i in 0..=35 {
             for j in 0..=35 {
                 let (a, b) = (0.1 * i as f64, 0.1 * j as f64);
-                s.trace(&a, &b, &mut out);
+                s.trace(a, b, &mut out);
                 let total: f64 = out.iter().map(|seg| seg.length).sum();
                 assert!(is_close(total, (b - a).abs(), Tol::EXACT), "{a} -> {b}");
             }
@@ -251,7 +249,7 @@ mod tests {
         let s = Slab1D::new(vec![0.0, 1.0, 3.0], vec![water, fuel]).unwrap();
 
         let mut segs = Vec::new();
-        s.trace(&0.5, &2.0, &mut segs); // 0.5 water + 1.0 fuel
+        s.trace(0.5, 2.0, &mut segs); // 0.5 water + 1.0 fuel
         let mut tau = [0.0; 2];
         optical_depths(&lib, &segs, &mut tau);
         assert_close(tau[0], 0.5 * 0.3 + 1.0 * 0.5);

@@ -1,11 +1,14 @@
 //! Shared geometry traits
 
-use crate::{BoundaryBox, Ended, Leg, MaterialId, Partition, Path, Vec3};
+use crate::{BoundaryBox, Ended, Geometry, Leg, MaterialId, Partition, Path, Vec3};
 
-/// A geometry backend that can trace straight paths with boundary conditions.
+/// A 3D geometry backend: the core [`Geometry`] (volume, uniform sampling,
+/// usable by the `mrr-core` driver) plus material lookup and tracing with
+/// boundary conditions. This is the only tracing interface; there is no
+/// separate core tracing trait.
 ///
 /// Implementations must pass [`crate::conformance`].
-pub trait Walker {
+pub trait Walker: Geometry<Point = Vec3> {
     /// The outer boundary (and with it the image set for reflections)
     fn boundary(&self) -> &BoundaryBox;
 

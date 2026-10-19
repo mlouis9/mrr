@@ -35,13 +35,29 @@
 //!   with its location.
 
 use mrr_geom3d::{
-    BoundaryBox, Crossed, Ended, Leg, MaterialId, Partition, Path, Vec3, Walker, tol,
+    BoundaryBox, Crossed, Ended, Geometry, Leg, MaterialId, Partition, Path, Vec3, Walker, tol,
 };
 
 use crate::{CellId, Model};
 
 /// Consecutive zero-length steps tolerated before forcing progress
 const MAX_STALLS: usize = 4;
+
+/// The core geometry view of the model: the domain is the boundary box,
+/// sampled uniformly (every sample lands inside, so none is rejected).
+impl Geometry for Model {
+    type Point = Vec3;
+    const SAMPLE_DIM: usize = 3;
+
+    fn volume(&self) -> f64 {
+        Model::boundary(self).volume()
+    }
+
+    fn map_uniform(&self, u: &[f64]) -> Option<Vec3> {
+        let b = Model::boundary(self);
+        Some(b.lower() + Vec3::new(u[0], u[1], u[2]) * b.size())
+    }
+}
 
 impl Walker for Model {
     fn boundary(&self) -> &BoundaryBox {
@@ -427,6 +443,20 @@ mod tests {
         let (path, _) = check_walk(&m, x, (xp - x).normalize(), (xp - x).length());
         assert_close(path.length(), 0.76);
         assert_eq!(path.last_dir(), -Vec3::X);
+    }
+
+    // ---------------- core Geometry ----------------
+
+    #[test]
+    fn model_is_a_core_geometry() {
+        let m = pin_cell(Bc::Reflective);
+        assert_close(m.volume(), (2.0 * HALF_PITCH).powi(2) * 2.0);
+        assert_eq!(<Model as Geometry>::SAMPLE_DIM, 3);
+        assert_eq!(m.map_uniform(&[0.0, 0.0, 0.0]), Some(m.boundary().lower()));
+        let p = m.map_uniform(&[0.5, 0.5, 0.25]).unwrap();
+        assert_vec_close(p, Vec3::new(0.0, 0.0, 0.5));
+        // Samples land in a cell, so the driver's points are always valid
+        assert_eq!(Walker::material_at(&m, p, Vec3::X), Some(FUEL));
     }
 
     // ---------------- conformance ----------------

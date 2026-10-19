@@ -27,5 +27,5 @@ pub use walk::{Ended, Leg, Path, material_segments};
 
 // Types that appear in this crate's public signatures, re-exported so users
 // do not need direct dependencies on `mrr-core` / `mrr-math` for them.
-pub use mrr_core::{MaterialId, Segment};
+pub use mrr_core::{Geometry, MaterialId, Segment};
 pub use mrr_math::{Partition, Span};

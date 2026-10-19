@@ -8,7 +8,7 @@
 //! parts are linear in φ, so they are unbiased for a fixed k.
 
 use mrr_core::MomentLayout;
-use mrr_core::traits::{Emission, Emitted, Tracer};
+use mrr_core::traits::{Emission, Emitted};
 use mrr_xs::MaterialLibrary;
 
 use crate::geometry::Slab1D;
@@ -36,7 +36,7 @@ impl Emission<Slab1D> for SlabEmission<'_> {
             "flux block has the wrong layout"
         );
         let id = geometry
-            .material_at(&point)
+            .material_at(point)
             .unwrap_or_else(|| panic!("emission point {point} is outside the slab"));
         let mat = self.lib.material(id);
         let n_groups = self.lib.n_groups();
