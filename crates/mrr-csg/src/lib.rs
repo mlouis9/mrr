@@ -1,14 +1,14 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Native constructive-solid-geometry backend.
+//!
+//! - [`surface`]: planes, spheres and axis-aligned cylinders with signed
+//!   distance, direction-aware sense and ray crossing distance.
+//! - [`model`]: cells as intersections of half-spaces, and the [`Model`] that
+//!   holds them together with the outer `BoundaryBox`.
+//!
+//! The walker (`impl Walker for Model`) is built on these pieces.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod model;
+pub mod surface;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use model::{Cell, CellId, Halfspace, Model, ModelError, SurfaceId};
+pub use surface::{Axis, Surface};

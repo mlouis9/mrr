@@ -198,6 +198,7 @@ dependencies = [
 name = "mrr-csg"
 version = "0.1.0"
 dependencies = [
+ "mrr-core",
  "mrr-geom3d",
 ]
 
