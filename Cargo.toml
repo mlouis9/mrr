@@ -20,7 +20,6 @@ proptest = "1"
 thiserror = "2"
 rand = "0.10"
 rand_xoshiro = "0.8"
-approx = "0.5"
 
 [profile.release]
 debug = true # keep symbols so profilers can name your functions
