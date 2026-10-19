@@ -1,12 +1,12 @@
 [package]
 name = "mrr-core"
-version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+version.workspace = true
 
 [dependencies]
-rand = "0.10.3"
-rand_xoshiro = "0.8.1"
+rand.workspace = true
+rand_xoshiro.workspace = true
 
 [dev-dependencies]
-mrr-math = { path = "../mrr-math" }
+mrr-math.workspace = true
 approx.workspace = true

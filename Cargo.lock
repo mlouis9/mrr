@@ -207,6 +207,9 @@ dependencies = [
 [[package]]
 name = "mrr-csg"
 version = "0.1.0"
+dependencies = [
+ "mrr-geom3d",
+]
 
 [[package]]
 name = "mrr-geom3d"

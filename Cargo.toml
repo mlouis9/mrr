@@ -7,13 +7,19 @@ edition = "2024"
 version = "0.1.0"
 
 [workspace.dependencies]
-# internal crates, referenced by path
+# internal crates
 mrr-math = { path = "crates/mrr-math" }
 mrr-core = { path = "crates/mrr-core" }
-# external crates, versions pinned in one place
-rayon = "1"
-serde = { version = "1", features = ["derive"] }
-toml = "0.8"
+mrr-xs = { path = "crates/mrr-xs" }
+mrr-slab-1d = { path = "crates/mrr-slab-1d" }
+mrr-geom3d = { path = "crates/mrr-geom3d" }
+mrr-csg = { path = "crates/mrr-csg" }
+# external crates
+glam = "0.34"
+proptest = "1"
+thiserror = "2"
+rand = "0.10"
+rand_xoshiro = "0.8"
 approx = "0.5"
 
 [profile.release]

@@ -1,10 +1,10 @@
 [package]
 name = "mrr-slab-1d"
-version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+version.workspace = true
 
 [dependencies]
-mrr-core = { version = "0.1.0", path = "../mrr-core" }
-mrr-math = { version = "0.1.0", path = "../mrr-math" }
-mrr-xs = { version = "0.1.0", path = "../mrr-xs" }
-thiserror = "2.0.21"
+mrr-core.workspace = true
+mrr-math.workspace = true
+mrr-xs.workspace = true
+thiserror.workspace = true

@@ -4,6 +4,6 @@ edition.workspace = true
 version.workspace = true
 
 [dependencies]
-mrr-core = { version = "0.1.0", path = "../mrr-core" }
-mrr-math = { version = "0.1.0", path = "../mrr-math" }
-thiserror = "2.0.21"
+mrr-core.workspace = true
+mrr-math.workspace = true
+thiserror.workspace = true
