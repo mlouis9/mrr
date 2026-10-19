@@ -62,7 +62,7 @@ impl AxisBins {
     /// along the axis. Moving up (or not moving): half-open `[e_i, e_{i+1})`.
     /// Moving down: `(e_i, e_{i+1}]`, so a point on an edge belongs to the bin
     /// below it, which is where it is heading.
-    fn locate_coord(&self, x: f64, v: f64) -> Option<usize> {
+    pub(crate) fn locate_coord(&self, x: f64, v: f64) -> Option<usize> {
         if v < 0.0 {
             let edges = self.bins.edges();
             if !(x > self.bins.lower() && x <= self.bins.upper()) {

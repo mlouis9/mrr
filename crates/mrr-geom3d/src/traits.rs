@@ -9,7 +9,8 @@ use mrr_math::Partition;
 pub trait Walker {
     fn boundary(&self) -> &BoundaryBox;
 
-    fn material_at(&self, p: Vec3) -> MaterialId;
+    /// Direction vector used for ties on surfaces
+    fn material_at(&self, p: Vec3, dir: Vec3) -> Option<MaterialId>;
 
     fn walk(
         &self,
@@ -17,7 +18,7 @@ pub trait Walker {
         dir: Vec3,
         s_max: f64,
         path: &mut Path,
-        partition: &mut Partition<f64>,
+        materials: &mut Partition<MaterialId>,
     ) -> Ended;
 }
 
