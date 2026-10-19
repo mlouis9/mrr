@@ -53,8 +53,7 @@
 
 use std::fmt;
 
-use crate::affine::Affine;
-use crate::{DMat3, Vec3, tol};
+use crate::{Affine, DMat3, Vec3, tol};
 
 /// Condition on one face of the box
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

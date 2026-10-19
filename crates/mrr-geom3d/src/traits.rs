@@ -1,17 +1,25 @@
 //! Shared geometry traits
 
-use crate::Vec3;
-use crate::boundary::BoundaryBox;
-use crate::walk::{Ended, Leg, Path};
-use mrr_core::geometry::MaterialId;
-use mrr_math::Partition;
+use crate::{BoundaryBox, Ended, Leg, MaterialId, Partition, Path, Vec3};
 
+/// A geometry backend that can trace straight paths with boundary conditions.
+///
+/// Implementations must pass [`crate::conformance`].
 pub trait Walker {
+    /// The outer boundary (and with it the image set for reflections)
     fn boundary(&self) -> &BoundaryBox;
 
-    /// Direction vector used for ties on surfaces
+    /// Material at `p`, `None` outside the domain; a point on a surface takes
+    /// the side `dir` points into
     fn material_at(&self, p: Vec3, dir: Vec3) -> Option<MaterialId>;
 
+    /// Walk from `origin` along unit `dir` for path length up to `s_max`,
+    /// following the boundary conditions. Fills `path` (legs, plus how the walk
+    /// ended) and `materials` (material intervals over `[0, path.s_end()]`),
+    /// both reset first, and returns the same [`Ended`] stored in `path`.
+    ///
+    /// A shadow ray to image `t` of a node is
+    /// `walk(x, unit(x' - x), |x' - x|)` with `x' = boundary().image(t, node)`.
     fn walk(
         &self,
         origin: Vec3,

@@ -4,5 +4,4 @@ edition.workspace = true
 version.workspace = true
 
 [dependencies]
-mrr-core.workspace = true
 mrr-geom3d.workspace = true

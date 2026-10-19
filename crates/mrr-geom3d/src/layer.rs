@@ -19,11 +19,9 @@
 //!   point exactly on an edge belongs to the region `dir` points into. It must
 //!   agree with the label `segment_leg` gives the interval starting at `p`.
 
-use mrr_math::{Bins, Partition};
+use mrr_math::Bins;
 
-use crate::traits::Layer;
-use crate::walk::Leg;
-use crate::{Vec3, tol};
+use crate::{Layer, Leg, Partition, Vec3, tol};
 
 /// A new empty partition starting at `s = 0` with the shared `tol::LEN`.
 /// Every partition a layer fills should be created this way (or reset from
@@ -122,7 +120,7 @@ impl Layer for AxisBins {
 mod tests {
     use super::*;
     use crate::testing::*;
-    use crate::walk::{Ended, Path};
+    use crate::{Ended, Path};
 
     /// z bins [0,1) [1,1.5) [1.5,4)
     fn zbins() -> AxisBins {

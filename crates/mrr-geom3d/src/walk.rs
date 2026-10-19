@@ -8,7 +8,7 @@
 //! Positions are continuous across a reflection but not across a periodic
 //! translation, so only continuity in `s` is enforced between legs.
 
-use crate::{Vec3, tol};
+use crate::{MaterialId, Partition, Segment, Vec3, tol};
 
 /// The route taken by one walk: where and in which direction it started,
 /// straight legs contiguous in `s`, and how the walk ended.
@@ -207,6 +207,16 @@ pub enum Ended {
     Reached,
 }
 
+/// Convert a material partition into `(material, length)` segments, for
+/// `mrr_xs::optical_depths`. `out` is cleared first.
+pub fn material_segments(materials: &Partition<MaterialId>, out: &mut Vec<Segment>) {
+    out.clear();
+    out.extend(materials.iter().map(|span| Segment {
+        material: span.label,
+        length: span.length(),
+    }));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -346,6 +356,22 @@ mod tests {
     fn pushing_after_finish_panics_in_debug() {
         let mut p = bounce();
         p.push_leg(leg());
+    }
+
+    #[test]
+    fn material_segments_are_interval_lengths() {
+        let mut p = Partition::new(0.0, tol::LEN);
+        p.push(1.5, MaterialId(0));
+        p.push(2.0, MaterialId(1));
+        let mut segs = vec![Segment {
+            material: MaterialId(9),
+            length: 9.0,
+        }];
+        material_segments(&p, &mut segs);
+        assert_eq!(segs.len(), 2);
+        assert_eq!(segs[1].material, MaterialId(1));
+        assert_close(segs[0].length, 1.5);
+        assert_close(segs[1].length, 0.5);
     }
 
     #[test]

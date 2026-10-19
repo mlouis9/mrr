@@ -15,9 +15,7 @@
 
 use std::fmt;
 
-use mrr_core::MaterialId;
-use mrr_geom3d::Vec3;
-use mrr_geom3d::boundary::BoundaryBox;
+use mrr_geom3d::{BoundaryBox, MaterialId, Vec3};
 
 use crate::surface::Surface;
 
@@ -220,7 +218,7 @@ impl Model {
 mod tests {
     use super::*;
     use crate::surface::Axis;
-    use mrr_geom3d::boundary::Bc;
+    use mrr_geom3d::Bc;
     use mrr_geom3d::testing::*;
 
     const FUEL: MaterialId = MaterialId(0);

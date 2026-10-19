@@ -16,12 +16,9 @@
 
 use std::fmt;
 
-use mrr_math::{Bins, Partition};
+use mrr_math::Bins;
 
-use crate::layer::AxisBins;
-use crate::traits::Layer;
-use crate::walk::Leg;
-use crate::{Vec3, tol};
+use crate::{AxisBins, Layer, Leg, Partition, Vec3, tol};
 
 /// Why a `CartesianGrid` could not be built
 #[derive(Debug, Clone, PartialEq)]
@@ -195,9 +192,8 @@ impl Layer for CartesianGrid {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layer::new_partition;
     use crate::testing::*;
-    use crate::walk::{Ended, Path};
+    use crate::{Ended, Path, new_partition};
 
     /// 3 × 2 × 4 cells of size (1, 0.5, 0.25) from (-1, 0, 2)
     fn grid() -> CartesianGrid {
