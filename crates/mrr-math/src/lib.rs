@@ -6,6 +6,7 @@
 pub mod bins;
 pub mod expint;
 pub mod group_matrix;
+pub mod harmonics;
 pub mod legendre;
 pub mod partition;
 pub mod quadrature;
@@ -14,5 +15,7 @@ pub mod transfer;
 
 pub use bins::Bins;
 pub use group_matrix::GroupMatrix;
+pub use harmonics::RealHarmonics;
 pub use partition::{Partition, Span};
+pub use quadrature::{GaussLegendre, SphereQuadrature};
 pub use transfer::TransferTensor;

@@ -30,6 +30,24 @@ pub struct CycleSnapshot<'a, P> {
     pub atoms: &'a Atoms<P>,
 }
 
+/// How the eigenvalue is updated each cycle.
+///
+/// Both use the emission parts at the new nodes, `Φ(Q_s)` and `Φ(Q_f)` (fission
+/// without `1/k`), with the source normalized so that `Φ(Q) = V`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum KUpdate {
+    /// `k = Φ(Q_f) / (V − Φ(Q_s))`: the k that makes the new source integrate
+    /// to `V` exactly. Lowest noise when every node value is moderate, but the
+    /// denominator can turn negative when one node scores very high (a node
+    /// next to an atom under a non-pole-matched proposal in 3D), which aborts
+    /// the run.
+    Split,
+    /// `λ = (Φ(Q_s) + Φ(Q_f)/k_n) / V`, `k_{n+1} = k_n λ`, then the source is
+    /// divided by `λ`. The standard power-iteration update: always positive, so
+    /// robust to heavy-tailed node values. `initial` is `k_0`.
+    Multiplicative { initial: f64 },
+}
+
 /// Parameters influencing simulation
 pub struct RunConfig {
     pub rules: Vec<Box<dyn StoppingRule>>,
@@ -37,6 +55,8 @@ pub struct RunConfig {
     pub n_source_atoms: usize,
     /// Base seed: every random stream in the run is derived from this
     pub seed: u64,
+    /// Eigenvalue update rule
+    pub k_update: KUpdate,
 }
 
 /// Contains the specification of the "problem" distinct from the parameters (often compute-dependent
@@ -106,13 +126,16 @@ impl<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal<G>> Problem<G, K, E,
 
     /// Replace each target's flux moments by its emission moments and return k.
     ///
-    /// Emission gives scattering (Q_s) and fission (Q_f, without 1/k) parts.
-    /// The source is normalized so that its integral is V, and
-    /// Q = Q_s + Q_f / k, so V = Phi(Q_s) + Phi(Q_f) / k, giving
-    ///     k = Phi(Q_f) / (V - Phi(Q_s)).
-    /// Combining the parts with this k makes the new source integrate to V
-    /// by construction, so no separate rescaling step is needed.
-    fn emit_and_normalize(&self, targets: &mut Atoms<G::Point>) -> f64 {
+    /// Emission gives scattering (Q_s) and fission (Q_f, without 1/k) parts;
+    /// see [`KUpdate`] for how they are combined. Either way the new source
+    /// integrates to V. `k_current` is the estimate before this cycle (used
+    /// by the multiplicative update).
+    fn emit_and_normalize(
+        &self,
+        targets: &mut Atoms<G::Point>,
+        update: KUpdate,
+        k_current: f64,
+    ) -> f64 {
         let layout = self.layout;
         let mut emitted: Vec<Emitted> = Vec::with_capacity(targets.len());
         let (mut phi_s, mut phi_f) = (0.0, 0.0);
@@ -129,23 +152,39 @@ impl<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal<G>> Problem<G, K, E,
             emitted.push(e);
         }
 
-        let denom = self.geometry.volume() - phi_s;
-        assert!(
-            phi_f > 0.0 && denom > 0.0,
-            "cannot determine k: Phi(Q_f) = {phi_f:e}, V - Phi(Q_s) = {denom:e}"
-        );
-        let k = phi_f / denom;
+        let volume = self.geometry.volume();
+        // (k used to combine the parts, scale applied to the result, new k)
+        let (k_mix, scale, k_new) = match update {
+            KUpdate::Split => {
+                let denom = volume - phi_s;
+                assert!(
+                    phi_f > 0.0 && denom > 0.0,
+                    "cannot determine k: Phi(Q_f) = {phi_f:e}, V - Phi(Q_s) = {denom:e} \
+                     (heavy-tailed node values? consider KUpdate::Multiplicative)"
+                );
+                let k = phi_f / denom;
+                (k, 1.0, k)
+            }
+            KUpdate::Multiplicative { .. } => {
+                let lambda = (phi_s + phi_f / k_current) / volume;
+                assert!(
+                    lambda > 0.0 && lambda.is_finite(),
+                    "cannot update k: emission integral ratio {lambda:e}"
+                );
+                (k_current, 1.0 / lambda, k_current * lambda)
+            }
+        };
 
         for (target_idx, e) in emitted.iter().enumerate() {
             let moments: Vec<f64> = e
                 .scattering
                 .iter()
                 .zip(&e.fission)
-                .map(|(s, f)| s + f / k)
+                .map(|(s, f)| scale * (s + f / k_mix))
                 .collect();
             targets.update_atom_moments(target_idx, &moments);
         }
-        k
+        k_new
     }
 }
 
@@ -197,7 +236,14 @@ pub fn power_iterate_with<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal
         problem.gather_flux(&atoms, &mut targets);
 
         // Compute new emission source, k, and normalize
-        (k_prev, k) = (k, problem.emit_and_normalize(&mut targets));
+        let k_current = match (cycle, cfg.k_update) {
+            (0, KUpdate::Multiplicative { initial }) => initial,
+            _ => k,
+        };
+        (k_prev, k) = (
+            k,
+            problem.emit_and_normalize(&mut targets, cfg.k_update, k_current),
+        );
         atoms = targets;
         cycle += 1;
         on_cycle(&CycleSnapshot {
@@ -234,6 +280,7 @@ mod tests {
             rules: vec![Box::new(MaxCycles::new(5))],
             n_source_atoms: 500,
             seed: 11,
+            k_update: KUpdate::Split,
         };
         (power_iterate(&problem, &cfg), volume)
     }
@@ -271,6 +318,7 @@ mod tests {
             rules: vec![Box::new(MaxCycles::new(3))],
             n_source_atoms: 10,
             seed: 1,
+            k_update: KUpdate::Split,
         };
         let mut seen = Vec::new();
         let result = power_iterate_with(&problem, &cfg, |snap| {
@@ -284,6 +332,33 @@ mod tests {
             assert_eq!(n, 10);
         }
         assert_eq!(seen.last().unwrap().1, Some(result.k));
+    }
+
+    /// With Φ(flux) = V, Q_s = c·flux, Q_f = f·flux: λ = c + f/k_n, so the
+    /// multiplicative update k_{n+1} = c k_n + f converges geometrically to
+    /// f/(1 − c), the same fixed point as the split update.
+    #[test]
+    fn multiplicative_update_converges_to_the_same_k() {
+        let geometry = TestSlab::new(1.5, 0.0..1.0);
+        let layout = MomentLayout::from_legendre_order(1, 2);
+        let problem = Problem::new(
+            geometry,
+            layout,
+            ConstGather::new(layout.isotropic_white_block()),
+            ScaledEmission::new(0.5, 0.6),
+            UniformProposal,
+        );
+        let cfg = RunConfig {
+            rules: vec![Box::new(MaxCycles::new(60))],
+            n_source_atoms: 50,
+            seed: 3,
+            k_update: KUpdate::Multiplicative { initial: 1.0 },
+        };
+        let mut ks = Vec::new();
+        let result = power_iterate_with(&problem, &cfg, |s| ks.extend(s.k));
+        // First step from k_0 = 1: k_1 = 0.5·1 + 0.6
+        assert_close(ks[0], 1.1);
+        assert_close(result.k, 0.6 / (1.0 - 0.5));
     }
 
     #[test]

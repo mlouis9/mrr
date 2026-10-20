@@ -1,0 +1,11 @@
+[package]
+name = "mrr-3d"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+mrr-core.workspace = true
+mrr-csg.workspace = true
+mrr-geom3d.workspace = true
+mrr-math.workspace = true
+mrr-xs.workspace = true

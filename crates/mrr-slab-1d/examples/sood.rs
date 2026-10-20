@@ -16,7 +16,7 @@ use std::io::{self, BufWriter, Write};
 use std::path::PathBuf;
 
 use mrr_core::convergence::MaxCycles;
-use mrr_core::{RunConfig, power_iterate_with};
+use mrr_core::{KUpdate, RunConfig, power_iterate_with};
 use mrr_slab_1d::problems::benchmarks::{PUA_1_0_SL_K, pua_1_0_sl};
 
 fn arg<T: std::str::FromStr>(args: &[String], i: usize, default: T) -> T {
@@ -43,6 +43,7 @@ fn main() -> io::Result<()> {
         rules: vec![Box::new(MaxCycles::new(cycles))],
         n_source_atoms: n_atoms,
         seed,
+        k_update: KUpdate::Split,
     };
 
     let mut atoms_csv = BufWriter::new(File::create(out_dir.join("atoms.csv"))?);

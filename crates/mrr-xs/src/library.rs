@@ -87,10 +87,15 @@ impl MaterialLibrary {
         self.materials.is_empty()
     }
 
-    /// Shape of each atom's moment block: (max_order + 1) moments x G groups.
-    /// The single source of truth for the layout used by the run.
+    /// 1D slab moment block: (max_order + 1) Legendre moments × G groups.
     pub fn layout(&self) -> MomentLayout {
         MomentLayout::from_legendre_order(self.max_order, self.n_groups())
+    }
+
+    /// 3D moment block: (max_order + 1)² real-harmonic moments × G groups.
+    /// The scattering order of the data sets the angular order of the run.
+    pub fn harmonic_layout(&self) -> MomentLayout {
+        MomentLayout::from_harmonic_order(self.max_order, self.n_groups())
     }
 }
 
@@ -172,6 +177,13 @@ mod tests {
     #[should_panic(expected = "unknown material")]
     fn material_panics_on_unknown_id() {
         library().material(MaterialId(0));
+    }
+
+    #[test]
+    fn harmonic_layout_matches_groups_and_order() {
+        let lib = library();
+        let l = lib.harmonic_layout();
+        assert_eq!((l.n_moments(), l.n_groups()), (4, 2)); // L = 1: (1 + 1)² = 4
     }
 
     #[test]

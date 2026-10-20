@@ -52,6 +52,56 @@ impl GaussLegendre {
     }
 }
 
+/// Product quadrature on the unit sphere: Gauss–Legendre in μ = cosθ and the
+/// uniform (trapezoid) rule in φ, weights summing to 4π.
+///
+/// With `n_mu` polar and `n_phi` azimuthal points it integrates exactly every
+/// polynomial in (x, y, z) of degree ≤ min(2·n_mu − 1, n_phi − 1); in
+/// particular products of two harmonics of order ≤ L need
+/// `n_mu ≥ L + 1` and `n_phi ≥ 2L + 1`.
+#[derive(Debug, Clone)]
+pub struct SphereQuadrature {
+    dirs: Vec<[f64; 3]>,
+    weights: Vec<f64>,
+}
+
+impl SphereQuadrature {
+    pub fn product(n_mu: usize, n_phi: usize) -> Self {
+        assert!(n_phi > 0, "need at least one azimuthal point");
+        let gl = GaussLegendre::new(n_mu);
+        let dphi = 2.0 * std::f64::consts::PI / n_phi as f64;
+        let mut dirs = Vec::with_capacity(n_mu * n_phi);
+        let mut weights = Vec::with_capacity(n_mu * n_phi);
+        for (&mu, &wmu) in gl.nodes.iter().zip(&gl.weights) {
+            let s = (1.0 - mu * mu).max(0.0).sqrt();
+            for j in 0..n_phi {
+                let phi = (j as f64 + 0.5) * dphi;
+                dirs.push([s * phi.cos(), s * phi.sin(), mu]);
+                weights.push(wmu * dphi);
+            }
+        }
+        Self { dirs, weights }
+    }
+
+    pub fn len(&self) -> usize {
+        self.dirs.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.dirs.is_empty()
+    }
+
+    /// `(direction, weight)` pairs
+    pub fn iter(&self) -> impl Iterator<Item = ([f64; 3], f64)> + '_ {
+        self.dirs.iter().copied().zip(self.weights.iter().copied())
+    }
+
+    /// `∫ f(Ω) dΩ`
+    pub fn integrate(&self, f: impl Fn([f64; 3]) -> f64) -> f64 {
+        self.iter().map(|(d, w)| w * f(d)).sum()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,6 +137,22 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn sphere_quadrature_integrates_monomials() {
+        let q = SphereQuadrature::product(4, 8);
+        assert_eq!(q.len(), 32);
+        let four_pi = 4.0 * std::f64::consts::PI;
+        assert_close(q.integrate(|_| 1.0), four_pi);
+        assert_close(q.integrate(|d| d[2] * d[2]), four_pi / 3.0);
+        assert_close(q.integrate(|d| d[0] * d[0] * d[1] * d[1]), four_pi / 15.0);
+        assert_close_tol(q.integrate(|d| d[0] * d[1] * d[2]), 0.0, Tol::NUMERICAL);
+        // Directions are unit vectors
+        assert!(
+            q.iter()
+                .all(|(d, _)| ((d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) - 1.0).abs() < 1e-14)
+        );
     }
 
     #[test]

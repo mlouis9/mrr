@@ -1,4 +1,4 @@
-//! Describes how Legendre angular moments are implemented
+//! Shape of the angular × energy moment block every atom carries
 use std::ops::Range;
 
 /// Shape of one point's moment block: `n_moments` angular moments for each
@@ -9,20 +9,51 @@ use std::ops::Range;
 /// multigroup (energy stored as a block), 1 for continuous energy (energy
 /// stored in the atom's point instead). Nothing here assumes which.
 ///
-/// Moments are indexed by a flat index `k`. In 1D, k = ℓ. In 3D the mapping
-/// from (ℓ, m) to k is defined in `mrr_math`, not here
-#[derive(Clone, Copy)]
+/// Moments are indexed by a flat index `k`. In 1D, k = ℓ (Legendre moments);
+/// in 3D, k = ℓ² + ℓ + m (real spherical harmonics, see
+/// `mrr_math::harmonics`). Either way `k = 0` is the isotropic moment, equal
+/// to the angular integral, which is all this type relies on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MomentLayout {
     n_moments: usize,
     n_groups: usize,
 }
 
 impl MomentLayout {
-    pub fn from_legendre_order(max_order: usize, n_groups: usize) -> Self {
+    /// Any number of angular moments per energy bin
+    pub fn new(n_moments: usize, n_groups: usize) -> Self {
+        assert!(
+            n_moments > 0 && n_groups > 0,
+            "a moment block needs moments and groups"
+        );
         Self {
-            n_moments: max_order + 1,
+            n_moments,
             n_groups,
         }
+    }
+
+    /// 1D slab: Legendre moments ℓ = 0..=L, so L + 1 per group
+    pub fn from_legendre_order(max_order: usize, n_groups: usize) -> Self {
+        Self::new(max_order + 1, n_groups)
+    }
+
+    /// 3D: real spherical harmonics (ℓ, m) with ℓ = 0..=L, so (L + 1)² per group
+    pub fn from_harmonic_order(max_order: usize, n_groups: usize) -> Self {
+        Self::new((max_order + 1) * (max_order + 1), n_groups)
+    }
+
+    pub fn n_moments(&self) -> usize {
+        self.n_moments
+    }
+
+    pub fn n_groups(&self) -> usize {
+        self.n_groups
+    }
+
+    /// The moments of group `g` inside one atom's block
+    pub fn group_range(&self, g: usize) -> Range<usize> {
+        let start = g * self.n_moments;
+        start..start + self.n_moments
     }
 
     pub fn new_moments_array(&self, n_atoms: usize) -> Vec<f64> {
@@ -84,6 +115,28 @@ mod tests {
     // Order 2 (3 moments) with 2 groups: block = [g0: l0 l1 l2 | g1: l0 l1 l2]
     fn layout() -> MomentLayout {
         MomentLayout::from_legendre_order(2, 2)
+    }
+
+    #[test]
+    fn harmonic_layout_has_square_moment_count() {
+        let l = MomentLayout::from_harmonic_order(2, 3);
+        assert_eq!((l.n_moments(), l.n_groups(), l.block_len()), (9, 3, 27));
+        assert_eq!(l.index(0, 1), 9);
+        assert_eq!(l.group_range(2), 18..27);
+        // Moment 0 is still the total, so integrals and white blocks carry over
+        let white = l.isotropic_white_block();
+        assert_close(l.block_integral(&white), 1.0);
+        assert_eq!(white[l.index(3, 0)], 0.0);
+        assert_eq!(
+            MomentLayout::from_legendre_order(2, 3),
+            MomentLayout::new(3, 3)
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "needs moments and groups")]
+    fn empty_layout_panics() {
+        MomentLayout::new(0, 1);
     }
 
     #[test]

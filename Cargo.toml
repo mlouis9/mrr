@@ -14,12 +14,14 @@ mrr-xs = { path = "crates/mrr-xs" }
 mrr-slab-1d = { path = "crates/mrr-slab-1d" }
 mrr-geom3d = { path = "crates/mrr-geom3d" }
 mrr-csg = { path = "crates/mrr-csg" }
+mrr-3d = { path = "crates/mrr-3d" }
 # external crates
 glam = "0.34"
 proptest = "1"
 thiserror = "2"
 rand = "0.10"
 rand_xoshiro = "0.8"
+approx = "0.5"
 
 [profile.release]
 debug = true # keep symbols so profilers can name your functions

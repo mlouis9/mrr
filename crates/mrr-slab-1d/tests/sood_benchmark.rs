@@ -7,7 +7,7 @@
 //! is ≈ 4σ. Seeds are fixed, so the tests are deterministic.
 
 use mrr_core::convergence::MaxCycles;
-use mrr_core::{RunConfig, power_iterate_with};
+use mrr_core::{KUpdate, RunConfig, power_iterate_with};
 use mrr_slab_1d::problems::SlabProblem;
 use mrr_slab_1d::problems::benchmarks::{PUA_1_0_SL_K, pua, pua_1_0_sl, pua_slab};
 
@@ -21,6 +21,7 @@ fn mean_k(problem: &SlabProblem, seed: u64) -> f64 {
         rules: vec![Box::new(MaxCycles::new(INACTIVE + ACTIVE))],
         n_source_atoms: N_ATOMS,
         seed,
+        k_update: KUpdate::Split,
     };
     let mut ks = Vec::new();
     power_iterate_with(&problem.problem(), &cfg, |snap| {
