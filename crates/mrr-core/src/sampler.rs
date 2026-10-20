@@ -40,6 +40,14 @@ pub trait UnitSampler {
 pub trait SamplerStreams {
     type Sampler: UnitSampler;
     fn stream(&self, chunk: usize) -> Self::Sampler;
+
+    /// An independent family of streams for stratum `s` of a stratified
+    /// draw (e.g. the spread and pole parts of a mixture). For QMC each
+    /// stratum is then its own point set starting at index 0, instead of a
+    /// tail of another stratum's sequence.
+    fn stratum(&self, s: u64) -> Self
+    where
+        Self: Sized;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +101,7 @@ impl UnitSampler for RandomSampler {
 
 /// Random streams for one (base_seed, purpose, cycle): chunk `c` gets a
 /// `RandomSampler` seeded with `stream_seed(base_seed, purpose, cycle, c)`.
+#[derive(Debug, Clone, Copy)]
 pub struct RandomStreams {
     pub base_seed: u64,
     pub purpose: u64,
@@ -108,6 +117,13 @@ impl SamplerStreams for RandomStreams {
             self.cycle as u64,
             chunk as u64,
         ))
+    }
+
+    fn stratum(&self, s: u64) -> Self {
+        Self {
+            purpose: mix(self.purpose ^ mix(s + 1)),
+            ..*self
+        }
     }
 }
 
@@ -152,6 +168,80 @@ impl SamplerStreams for GridStreams1D {
         GridSampler1D {
             n: self.n,
             i: chunk * CHUNK_SIZE,
+        }
+    }
+
+    /// Deterministic grids have no randomness to separate: every stratum
+    /// sees the same grid
+    fn stratum(&self, _s: u64) -> Self {
+        Self { n: self.n }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Run-time choice of sampler
+// ---------------------------------------------------------------------------
+
+/// Which point sets the driver uses
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SamplerKind {
+    /// Pseudo-random (Xoshiro256++): Monte Carlo, error ~ N^{-1/2}
+    #[default]
+    Random,
+    /// Owen-scrambled Sobol: randomized QMC
+    Sobol,
+}
+
+/// Streams of either kind, chosen at run time
+#[derive(Debug, Clone, Copy)]
+pub enum AnyStreams {
+    Random(RandomStreams),
+    Sobol(crate::qmc::SobolStreams),
+}
+
+impl AnyStreams {
+    pub fn new(kind: SamplerKind, base_seed: u64, purpose: u64, cycle: usize) -> Self {
+        match kind {
+            SamplerKind::Random => AnyStreams::Random(RandomStreams {
+                base_seed,
+                purpose,
+                cycle,
+            }),
+            SamplerKind::Sobol => {
+                AnyStreams::Sobol(crate::qmc::SobolStreams::new(base_seed, purpose, cycle))
+            }
+        }
+    }
+}
+
+/// A sampler of either kind
+pub enum AnySampler {
+    Random(RandomSampler),
+    Sobol(crate::qmc::SobolSampler),
+}
+
+impl UnitSampler for AnySampler {
+    fn next_point(&mut self, u: &mut [f64]) {
+        match self {
+            AnySampler::Random(s) => s.next_point(u),
+            AnySampler::Sobol(s) => s.next_point(u),
+        }
+    }
+}
+
+impl SamplerStreams for AnyStreams {
+    type Sampler = AnySampler;
+    fn stream(&self, chunk: usize) -> AnySampler {
+        match self {
+            AnyStreams::Random(s) => AnySampler::Random(s.stream(chunk)),
+            AnyStreams::Sobol(s) => AnySampler::Sobol(s.stream(chunk)),
+        }
+    }
+
+    fn stratum(&self, s: u64) -> Self {
+        match self {
+            AnyStreams::Random(r) => AnyStreams::Random(r.stratum(s)),
+            AnyStreams::Sobol(q) => AnyStreams::Sobol(q.stratum(s)),
         }
     }
 }

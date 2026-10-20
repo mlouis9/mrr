@@ -188,6 +188,7 @@ fn power_iteration_converges_to_k_r() {
         n_source_atoms: n,
         seed: 9,
         k_update: KUpdate::Split,
+        sampler: Default::default(),
     };
     let mut ks = Vec::new();
     power_iterate_with(&problem, &cfg, |s| ks.extend(s.k));
@@ -320,4 +321,20 @@ fn replica_variance_is_stable_as_replicas_grow() {
     // Sampling error of a variance from 200 values is ≈ √(2/200) ≈ 10% for a
     // light tail; allow 35%
     assert!((ratio - 1.0).abs() < 0.35, "variance {v_half} → {v_all}");
+}
+
+#[test]
+fn the_tapered_profile_is_unbiased_too() {
+    use mrr_3d::PoleProfile;
+    let lib = library(1.0, 0.0, 0.0);
+    let model = homogeneous_box(1.0, Bc::Reflective);
+    let atoms = uniform_atoms(&model, &lib, 16, 12);
+    let prop = MixtureProposal::new(0.3, 0.6).with_profile(PoleProfile::Tapered);
+    let (sums, _) = replicate(&prop, &model, &atoms, 200, |_| 1.0);
+    assert_z("Σw (tapered)", &sums, model.volume());
+    let gather = ExactGather::new(&lib, R);
+    let (sums, _) = replicate(&prop, &model, &atoms, 100, |x| {
+        gather.gather(&model, &atoms, x)[0]
+    });
+    assert_z("∫φ (tapered)", &sums, model.volume() * (1.0 - (-R).exp()));
 }

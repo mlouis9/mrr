@@ -20,4 +20,4 @@ pub use angular::AngularBasis;
 pub use emission::HarmonicEmission;
 pub use gather::ExactGather;
 pub use kernel::{PointKernel, point_kernel};
-pub use proposal::MixtureProposal;
+pub use proposal::{MixtureProposal, PoleProfile};

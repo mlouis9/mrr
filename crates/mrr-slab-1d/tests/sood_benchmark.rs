@@ -22,6 +22,7 @@ fn mean_k(problem: &SlabProblem, seed: u64) -> f64 {
         n_source_atoms: N_ATOMS,
         seed,
         k_update: KUpdate::Split,
+        sampler: Default::default(),
     };
     let mut ks = Vec::new();
     power_iterate_with(&problem.problem(), &cfg, |snap| {

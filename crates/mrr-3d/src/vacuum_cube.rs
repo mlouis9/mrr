@@ -74,6 +74,7 @@ pub fn meshless_k(cube: &AnalogCube, s: &MeshlessSettings) -> Vec<f64> {
         n_source_atoms: s.n,
         seed: s.seed,
         k_update: KUpdate::Split,
+        sampler: Default::default(),
     };
     let mut ks = Vec::new();
     power_iterate_with(&problem, &cfg, |info| ks.extend(info.k));

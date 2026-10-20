@@ -7,6 +7,7 @@ pub mod geometry;
 pub mod init;
 pub mod moments;
 pub mod proposal;
+pub mod qmc;
 pub mod sampler;
 pub mod traits;
 
@@ -16,6 +17,7 @@ pub use driver::{
 };
 pub use geometry::{MaterialId, Segment};
 pub use moments::MomentLayout;
+pub use sampler::SamplerKind;
 pub use traits::{Emission, Emitted, Gather, Geometry, Proposal};
 
 #[cfg(test)]

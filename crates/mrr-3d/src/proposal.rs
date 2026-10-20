@@ -39,8 +39,12 @@
 //!
 //! # Determinism
 //!
-//! Spread draws use chunks `0..c_s` of the given streams, pole draws the
-//! following chunks, each of fixed size `CHUNK_SIZE`.
+//! Spread and pole draws use separate strata of the given streams
+//! ([`SamplerStreams::stratum`]), each chunked in fixed `CHUNK_SIZE` pieces.
+//! With scrambled Sobol streams each stratum is one RQMC point set: 3D for
+//! spread nodes, 4D `(atom, μ, φ, r)` for pole flights, with atoms ordered
+//! along a Z-curve so that the stratified atom coordinate is also stratified
+//! in space.
 
 use std::f64::consts::PI;
 
@@ -55,6 +59,45 @@ use mrr_geom3d::{BoundaryBox, Ended, Partition, Path, Vec3, Walker, new_partitio
 pub struct MixtureProposal {
     alpha: f64,
     r_c: f64,
+    profile: PoleProfile,
+}
+
+/// Radial distribution of pole flights, `r ∈ [0, r_c)` with density `g(r)`.
+/// The pole density is `π_a(x) = g(r)/(4π r²)` around each atom.
+///
+/// - `Uniform`: `g = 1/r_c`. Simplest, but `π` jumps to zero at `r = r_c`,
+///   so `φ/p` is discontinuous on every atom's ball surface: `N` surfaces
+///   at the node spacing, which removes most of the QMC gain.
+/// - `Tapered`: `g = 3(1 − r/r_c)²/r_c`, sampled by
+///   `r = r_c (1 − (1 − u)^{1/3})`. Same `1/r²` pole (so the same bounded
+///   scores), but `π` and its first derivative vanish at `r_c`: `p` is
+///   C¹ away from atoms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PoleProfile {
+    #[default]
+    Uniform,
+    Tapered,
+}
+
+impl PoleProfile {
+    /// Flight length from `u ∈ [0, 1)` (inverse CDF)
+    pub fn radius(self, r_c: f64, u: f64) -> f64 {
+        match self {
+            PoleProfile::Uniform => r_c * u,
+            PoleProfile::Tapered => r_c * (1.0 - (1.0 - u).cbrt()),
+        }
+    }
+
+    /// Radial density `g(r)` on `[0, r_c)`, zero outside
+    pub fn pdf(self, r_c: f64, r: f64) -> f64 {
+        if !(0.0..r_c).contains(&r) {
+            return 0.0;
+        }
+        match self {
+            PoleProfile::Uniform => 1.0 / r_c,
+            PoleProfile::Tapered => 3.0 * (1.0 - r / r_c).powi(2) / r_c,
+        }
+    }
 }
 
 impl MixtureProposal {
@@ -69,7 +112,20 @@ impl MixtureProposal {
             r_c > 0.0 && r_c.is_finite(),
             "pole radius must be positive and finite, got {r_c}"
         );
-        Self { alpha, r_c }
+        Self {
+            alpha,
+            r_c,
+            profile: PoleProfile::Uniform,
+        }
+    }
+
+    /// The same proposal with another radial profile
+    pub fn with_profile(self, profile: PoleProfile) -> Self {
+        Self { profile, ..self }
+    }
+
+    pub fn profile(&self) -> PoleProfile {
+        self.profile
     }
 
     /// Radius at which an atom's ball holds about `k` atoms of a uniform
@@ -102,8 +158,48 @@ impl MixtureProposal {
 pub struct PoleTable {
     /// Normalized masses `a_a` (sum to 1)
     mass: Vec<f64>,
-    /// `cdf[a] = a_0 + … + a_a`, with `cdf.last() == 1`
+    /// Atom indices in selection order (Morton order of their positions for
+    /// [`new`](Self::new), identity for [`from_masses`](Self::from_masses))
+    order: Vec<usize>,
+    /// `cdf[k] = a_{order[0]} + … + a_{order[k]}`, with `cdf.last() == 1`
     cdf: Vec<f64>,
+}
+
+/// Interleave the low 21 bits of three integers (Morton / Z-order key)
+fn morton_key(x: u64, y: u64, z: u64) -> u64 {
+    fn spread(mut v: u64) -> u64 {
+        v &= 0x1f_ffff;
+        v = (v | v << 32) & 0x1f_0000_0000_ffff;
+        v = (v | v << 16) & 0x1f_0000_ff00_00ff;
+        v = (v | v << 8) & 0x100f_00f0_0f00_f00f;
+        v = (v | v << 4) & 0x10c3_0c30_c30c_30c3;
+        v = (v | v << 2) & 0x1249_2492_4924_9249;
+        v
+    }
+    spread(x) | spread(y) << 1 | spread(z) << 2
+}
+
+/// Atom indices sorted along a Z-order curve over the atoms' bounding box.
+///
+/// Why: with QMC points the selection coordinate `u_0` is stratified, so
+/// consecutive slices of `[0, 1)` should map to *nearby* atoms; the flights
+/// (and the nodes) then inherit the stratification in space. With random
+/// points the order is irrelevant.
+pub fn spatial_order(points: &[Vec3]) -> Vec<usize> {
+    if points.is_empty() {
+        return Vec::new();
+    }
+    let lo = points.iter().copied().reduce(Vec3::min).unwrap();
+    let hi = points.iter().copied().reduce(Vec3::max).unwrap();
+    let scale = (hi - lo).max(Vec3::splat(1e-300));
+    let max = ((1u64 << 21) - 1) as f64;
+    let key = |p: Vec3| {
+        let q = (p - lo) / scale * max;
+        morton_key(q.x as u64, q.y as u64, q.z as u64)
+    };
+    let mut order: Vec<usize> = (0..points.len()).collect();
+    order.sort_by_key(|&i| key(points[i]));
+    order
 }
 
 impl PoleTable {
@@ -119,11 +215,17 @@ impl PoleTable {
                     .sum()
             })
             .collect();
-        Self::from_masses(&raw)
+        Self::with_order(&raw, spatial_order(atoms.points()))
     }
 
     /// From unnormalized non-negative masses
     pub fn from_masses(raw: &[f64]) -> Option<Self> {
+        Self::with_order(raw, (0..raw.len()).collect())
+    }
+
+    /// From unnormalized masses, selected in the given order of atom indices
+    pub fn with_order(raw: &[f64], order: Vec<usize>) -> Option<Self> {
+        assert_eq!(order.len(), raw.len());
         assert!(raw.iter().all(|m| *m >= 0.0 && m.is_finite()));
         let total: f64 = raw.iter().sum();
         if total <= 0.0 {
@@ -131,15 +233,15 @@ impl PoleTable {
         }
         let mass: Vec<f64> = raw.iter().map(|m| m / total).collect();
         let mut acc = 0.0;
-        let mut cdf: Vec<f64> = mass
+        let mut cdf: Vec<f64> = order
             .iter()
-            .map(|m| {
-                acc += m;
+            .map(|&i| {
+                acc += mass[i];
                 acc
             })
             .collect();
         *cdf.last_mut().unwrap() = 1.0; // remove round-off
-        Some(Self { mass, cdf })
+        Some(Self { mass, order, cdf })
     }
 
     pub fn mass(&self) -> &[f64] {
@@ -150,14 +252,16 @@ impl PoleTable {
         &self.cdf
     }
 
-    /// The atom `a` with `cdf[a−1] <= u < cdf[a]`, for `u ∈ [0, 1)`.
+    /// The atom `order[k]` with `cdf[k−1] <= u < cdf[k]`, for `u ∈ [0, 1)`.
     /// Atoms of zero mass are never selected.
     pub fn select(&self, u: f64) -> usize {
         // Clamp: u can round to 1.0 (e.g. from a QMC point), and then no
         // entry of the cdf exceeds it
-        self.cdf
+        let k = self
+            .cdf
             .partition_point(|c| *c <= u)
-            .min(self.cdf.len() - 1)
+            .min(self.cdf.len() - 1);
+        self.order[k]
     }
 }
 
@@ -198,8 +302,20 @@ pub fn pole_flight<G: Walker>(
     u: [f64; 3],
     scratch: &mut FlightScratch,
 ) -> Option<Vec3> {
+    pole_flight_with(geometry, x_a, r_c, PoleProfile::Uniform, u, scratch)
+}
+
+/// [`pole_flight`] with a radial profile: `r = profile.radius(r_c, u[2])`
+pub fn pole_flight_with<G: Walker>(
+    geometry: &G,
+    x_a: Vec3,
+    r_c: f64,
+    profile: PoleProfile,
+    u: [f64; 3],
+    scratch: &mut FlightScratch,
+) -> Option<Vec3> {
     let omega = isotropic_direction(u[0], u[1]);
-    let r = u[2] * r_c;
+    let r = profile.radius(r_c, u[2]);
     let ended = geometry.walk(x_a, omega, r, &mut scratch.path, &mut scratch.mats);
     if let Ended::Reached = ended {
         Some(scratch.path.end_point())
@@ -222,16 +338,28 @@ pub fn pole_density(
     x: Vec3,
     images: &mut Vec<[i32; 3]>,
 ) -> f64 {
+    pole_density_with(bbox, points, table, r_c, PoleProfile::Uniform, x, images)
+}
+
+/// [`pole_density`] with a radial profile: `Σ_a a_a Σ_t g(r)/(4π r²)`
+pub fn pole_density_with(
+    bbox: &BoundaryBox,
+    points: &[Vec3],
+    table: &PoleTable,
+    r_c: f64,
+    profile: PoleProfile,
+    x: Vec3,
+    images: &mut Vec<[i32; 3]>,
+) -> f64 {
     images.clear();
     bbox.images_within(x, r_c, images);
-    let norm = 1.0 / (4.0 * PI * r_c);
     let mut density = 0.0;
     for &t in images.iter() {
         let y = bbox.image(t, x);
         for (&x_a, &a) in points.iter().zip(table.mass()) {
             let r2 = (y - x_a).length_squared();
             if r2 < r_c * r_c && r2 > tol::LEN * tol::LEN {
-                density += a * norm / r2;
+                density += a * profile.pdf(r_c, r2.sqrt()) / (4.0 * PI * r2);
             }
         }
     }
@@ -275,12 +403,14 @@ impl<G: Walker> Proposal<G> for MixtureProposal {
             weights: Vec::with_capacity(n),
         };
 
-        // Spread draws: chunks 0..c_s
+        // Spread and pole draws are separate strata, each its own point set
+        // (for QMC: its own net, starting at index 0)
+        let (spread_streams, pole_streams) = (streams.stratum(0), streams.stratum(1));
         let c_s = n_s.div_ceil(CHUNK_SIZE);
         let mut u = vec![0.0; G::SAMPLE_DIM];
         for chunk in 0..c_s {
             let n_here = CHUNK_SIZE.min(n_s - chunk * CHUNK_SIZE);
-            let mut sampler = streams.stream(chunk);
+            let mut sampler = spread_streams.stream(chunk);
             let mut count = 0;
             while count < n_here {
                 sampler.next_point(&mut u);
@@ -291,20 +421,25 @@ impl<G: Walker> Proposal<G> for MixtureProposal {
             }
         }
 
-        // Pole draws: chunks c_s..c_s + c_p
+        // Pole draws
         if let Some((atoms, table)) = &pole {
             let mut scratch = FlightScratch::default();
             let mut u = [0.0; 4];
             for chunk in 0..n_p.div_ceil(CHUNK_SIZE) {
                 let n_here = CHUNK_SIZE.min(n_p - chunk * CHUNK_SIZE);
-                let mut sampler = streams.stream(c_s + chunk);
+                let mut sampler = pole_streams.stream(chunk);
                 for _ in 0..n_here {
                     sampler.next_point(&mut u);
                     let a = table.select(u[0]);
                     let x_a = atoms.points()[a];
-                    if let Some(x) =
-                        pole_flight(geometry, x_a, self.r_c, [u[1], u[2], u[3]], &mut scratch)
-                    {
+                    if let Some(x) = pole_flight_with(
+                        geometry,
+                        x_a,
+                        self.r_c,
+                        self.profile,
+                        [u[1], u[2], u[3]],
+                        &mut scratch,
+                    ) {
                         targets.points.push(x);
                     }
                 }
@@ -318,11 +453,12 @@ impl<G: Walker> Proposal<G> for MixtureProposal {
             .iter()
             .map(|&x| {
                 let pi = match &pole {
-                    Some((atoms, table)) => pole_density(
+                    Some((atoms, table)) => pole_density_with(
                         geometry.boundary(),
                         atoms.points(),
                         table,
                         self.r_c,
+                        self.profile,
                         x,
                         &mut images,
                     ),
@@ -497,6 +633,32 @@ mod tests {
         let x_a = [Vec3::new(0.0, 0.0, 0.8)];
         let d = pole_density(&one, &x_a, &t, r_c, Vec3::new(0.0, 0.0, 0.9), &mut images);
         assert_close(d, norm * (1.0 / 0.01 + 1.0 / 0.09));
+    }
+
+    #[test]
+    fn tapered_radii_follow_their_density() {
+        // E[r] = r_c/4 and P(r < r_c/2) = 1 − 1/8 for g = 3(1 − r/r_c)²/r_c
+        let (r_c, n) = (2.0, 40_000);
+        let mut s = streams(9).stream(0);
+        let (mut u, mut sum, mut inner) = ([0.0], 0.0, 0usize);
+        for _ in 0..n {
+            s.next_point(&mut u);
+            let r = PoleProfile::Tapered.radius(r_c, u[0]);
+            assert!((0.0..r_c).contains(&r));
+            sum += r;
+            inner += usize::from(r < 0.5 * r_c);
+        }
+        // std of r is r_c √(3/80)
+        let se = r_c * (3.0f64 / 80.0).sqrt() / (n as f64).sqrt();
+        assert!((sum / n as f64 - 0.5).abs() < 4.0 * se);
+        let p = inner as f64 / n as f64;
+        assert!((p - 0.875).abs() < 4.0 * (0.875f64 * 0.125 / n as f64).sqrt());
+        // pdf integrates to 1 and vanishes at r_c
+        let gl = mrr_math::GaussLegendre::new(20);
+        let total =
+            gl.integrate(|x| r_c / 2.0 * PoleProfile::Tapered.pdf(r_c, r_c / 2.0 * (x + 1.0)));
+        assert_close(total, 1.0);
+        assert_eq!(PoleProfile::Tapered.pdf(r_c, r_c), 0.0);
     }
 
     #[test]

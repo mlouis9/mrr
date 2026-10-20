@@ -178,6 +178,7 @@ fn run_reflective_box(n: usize, cycles: usize, seed: u64, r: f64) -> Vec<f64> {
         n_source_atoms: n,
         seed,
         k_update: KUpdate::Multiplicative { initial: 1.0 },
+        sampler: Default::default(),
     };
     let mut ks = Vec::new();
     power_iterate_with(&problem, &cfg, |s| ks.extend(s.k));

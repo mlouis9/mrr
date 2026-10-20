@@ -5,7 +5,7 @@ use crate::{
     convergence::{CycleInfo, StoppingRule},
     init::isotropic_white_uniform,
     moments::MomentLayout,
-    sampler::{RandomStreams, purpose},
+    sampler::{AnyStreams, SamplerKind, purpose},
     traits::{Emission, Emitted, Gather, Geometry, Proposal, Source, Targets},
 };
 
@@ -57,6 +57,9 @@ pub struct RunConfig {
     pub seed: u64,
     /// Eigenvalue update rule
     pub k_update: KUpdate,
+    /// Pseudo-random (MC) or scrambled Sobol (RQMC) point sets for every
+    /// draw: initialization and every cycle's proposal
+    pub sampler: SamplerKind,
 }
 
 /// Contains the specification of the "problem" distinct from the parameters (often compute-dependent
@@ -87,11 +90,7 @@ impl<G, K, E, P> Problem<G, K, E, P> {
 impl<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal<G>> Problem<G, K, E, P> {
     /// Initialize source
     fn init_src(&self, cfg: &RunConfig) -> Atoms<G::Point> {
-        let init_streams = RandomStreams {
-            base_seed: cfg.seed,
-            purpose: purpose::INIT,
-            cycle: 0,
-        };
+        let init_streams = AnyStreams::new(cfg.sampler, cfg.seed, purpose::INIT, 0);
         isotropic_white_uniform(
             &self.geometry,
             &self.layout,
@@ -101,18 +100,9 @@ impl<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal<G>> Problem<G, K, E,
     }
 
     /// Generate proposal atoms
-    fn propose(
-        &self,
-        seed: u64,
-        cycle: usize,
-        atoms: &Atoms<G::Point>,
-        n_targets: usize,
-    ) -> Atoms<G::Point> {
-        let proposal_streams = RandomStreams {
-            base_seed: seed,
-            purpose: purpose::PROPOSAL,
-            cycle,
-        };
+    fn propose(&self, cfg: &RunConfig, cycle: usize, atoms: &Atoms<G::Point>) -> Atoms<G::Point> {
+        let n_targets = cfg.n_source_atoms;
+        let proposal_streams = AnyStreams::new(cfg.sampler, cfg.seed, purpose::PROPOSAL, cycle);
         let layout = atoms.layout();
         let Targets { points, weights } = self.proposal.sample_target_atoms(
             &self.geometry,
@@ -236,7 +226,7 @@ pub fn power_iterate_with<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal
         }
 
         // Sample new points and weights according to proposal
-        let mut targets = problem.propose(cfg.seed, cycle, &atoms, cfg.n_source_atoms);
+        let mut targets = problem.propose(cfg, cycle, &atoms);
 
         // Perform gather
         problem.gather_flux(&atoms, &mut targets);
@@ -287,6 +277,7 @@ mod tests {
             n_source_atoms: 500,
             seed: 11,
             k_update: KUpdate::Split,
+            sampler: Default::default(),
         };
         (power_iterate(&problem, &cfg), volume)
     }
@@ -325,6 +316,7 @@ mod tests {
             n_source_atoms: 10,
             seed: 1,
             k_update: KUpdate::Split,
+            sampler: Default::default(),
         };
         let mut seen = Vec::new();
         let result = power_iterate_with(&problem, &cfg, |snap| {
@@ -359,6 +351,7 @@ mod tests {
             n_source_atoms: 50,
             seed: 3,
             k_update: KUpdate::Multiplicative { initial: 1.0 },
+            sampler: Default::default(),
         };
         let mut ks = Vec::new();
         let result = power_iterate_with(&problem, &cfg, |s| ks.extend(s.k));

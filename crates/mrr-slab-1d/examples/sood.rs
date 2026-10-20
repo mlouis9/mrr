@@ -44,6 +44,7 @@ fn main() -> io::Result<()> {
         n_source_atoms: n_atoms,
         seed,
         k_update: KUpdate::Split,
+        sampler: Default::default(),
     };
 
     let mut atoms_csv = BufWriter::new(File::create(out_dir.join("atoms.csv"))?);
