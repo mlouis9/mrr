@@ -11,7 +11,7 @@ impl<G: Geometry> Proposal<G> for UniformProposal {
         source: &Source<G::Point>,
         streams: &impl SamplerStreams,
     ) -> Targets<G::Point> {
-        let n_atoms = source.n_atoms();
+        let n_atoms = source.n_targets();
         assert!(n_atoms > 0); // Avoid division by zero
         let weight = geometry.volume() / n_atoms as f64;
         let n_chunks = n_atoms.div_ceil(CHUNK_SIZE);

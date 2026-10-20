@@ -101,7 +101,13 @@ impl<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal<G>> Problem<G, K, E,
     }
 
     /// Generate proposal atoms
-    fn propose(&self, seed: u64, cycle: usize, atoms: &Atoms<G::Point>) -> Atoms<G::Point> {
+    fn propose(
+        &self,
+        seed: u64,
+        cycle: usize,
+        atoms: &Atoms<G::Point>,
+        n_targets: usize,
+    ) -> Atoms<G::Point> {
         let proposal_streams = RandomStreams {
             base_seed: seed,
             purpose: purpose::PROPOSAL,
@@ -110,7 +116,7 @@ impl<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal<G>> Problem<G, K, E,
         let layout = atoms.layout();
         let Targets { points, weights } = self.proposal.sample_target_atoms(
             &self.geometry,
-            &Source::Existing(atoms),
+            &Source::Existing(atoms, n_targets),
             &proposal_streams,
         );
         Atoms::from_targets(points, weights, *layout, &layout.zero_block())
@@ -230,7 +236,7 @@ pub fn power_iterate_with<G: Geometry, K: Gather<G>, E: Emission<G>, P: Proposal
         }
 
         // Sample new points and weights according to proposal
-        let mut targets = problem.propose(cfg.seed, cycle, &atoms);
+        let mut targets = problem.propose(cfg.seed, cycle, &atoms, cfg.n_source_atoms);
 
         // Perform gather
         problem.gather_flux(&atoms, &mut targets);

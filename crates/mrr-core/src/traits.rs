@@ -53,18 +53,22 @@ pub trait Emission<G: Geometry> {
     fn compute_emission(&self, geometry: &G, point: G::Point, flux_moments: &[f64]) -> Emitted;
 }
 
-/// Whether an empirical source is already existing or is being initialized, consequences for
-/// reuse of Proposal during initialization
+/// What a proposal draws nodes for: an existing source (which it may aim at),
+/// or initialization (no source yet). Both carry the number `N` of nodes the
+/// estimator uses. For `Existing` this is the configured population, *not*
+/// `atoms.len()`: a proposal with zero samples (e.g. pole flights that leave
+/// through a vacuum face) returns fewer than `N` points, and the population
+/// must not shrink from cycle to cycle.
 pub enum Source<'a, P> {
-    Existing(&'a Atoms<P>),
+    Existing(&'a Atoms<P>, usize),
     Initialize(usize),
 }
 
 impl<P: Copy + Clone> Source<'_, P> {
-    pub fn n_atoms(&self) -> usize {
+    /// The number `N` of nodes (samples, including zero samples) to draw
+    pub fn n_targets(&self) -> usize {
         match self {
-            Source::Existing(atoms) => atoms.len(),
-            Source::Initialize(n) => *n,
+            Source::Existing(_, n) | Source::Initialize(n) => *n,
         }
     }
 }
